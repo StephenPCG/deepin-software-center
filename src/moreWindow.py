@@ -60,7 +60,7 @@ class MoreWindow(object):
         
         # Create list item.
         self.createListItem(1, __("New Feature"), self.newFeature)
-        self.createListItem(2, __("Proxy Setup"), self.setProxy)
+        # self.createListItem(2, __("Proxy Setup"), self.setProxy)
         self.createListItem(3, __("Forum Help"), self.forumHelp)
         self.createListItem(4, __("Report Problem"), self.reportProblem)
 
@@ -129,7 +129,7 @@ class MoreWindow(object):
 class NewFeature(object):
     '''New feature.'''
     
-    WINDOW_WIDTH = 360
+    WINDOW_WIDTH = 380
     WINDOW_HEIGHT = 270
 	
     def __init__(self, widget):

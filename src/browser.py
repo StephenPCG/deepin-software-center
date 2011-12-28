@@ -23,6 +23,7 @@
 from constant import *
 from lang import __, getDefaultLanguage
 from utils import *
+import sys
 import ctypes
 import gobject
 import glib
@@ -49,7 +50,7 @@ class Browser(webkit.WebView):
         self.initCookie()
         
         # Init proxy.
-        self.initProxy()
+        # self.initProxy()
 
         # Load uri.
         self.load_uri(uri)
@@ -65,11 +66,18 @@ class Browser(webkit.WebView):
         else:
             libgobject.g_object_set(self.session, 'add-feature', soupCookie, None)
         
-    def initProxy(self):
-        '''Init proxy.'''
-        proxyString = utils.parseProxyString()
-        if proxyString != None:
-            soupUri = libsoup.soup_uri_new(str(proxyString))
-            print "Soup Uri: %s" % (soupUri)
-            libgobject.g_object_set(self.session, 'proxy-uri', soupUri, None)
+    # def initProxy(self):
+    #     '''Init proxy.'''
+    #     proxyString = utils.parseProxyString()
+    #     if proxyString != None:
+    #         soupUri = libsoup.soup_uri_new(str(proxyString))
+    #         print "Soup Uri: %s" % (soupUri)
+    #         libgobject.g_object_set(self.session, 'proxy-uri', soupUri, None)
 
+if __name__ == "__main__":
+    window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+    window.add(Browser(sys.argv[1]))
+    
+    window.show_all()
+    
+    gtk.main()

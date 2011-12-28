@@ -42,9 +42,8 @@ import urllib2
 
 def sendStatistics():
     '''Send statistics.'''
-    # Send Mac address to server for statistics.
     try:
-        userId = getUserID()
+        userId = getUniqueId()
         args = {'a' : 'm', 'n' : userId}
         
         connection = urllib2.urlopen(
@@ -52,11 +51,9 @@ def sendStatistics():
             data=urllib.urlencode(args),
             timeout=POST_TIMEOUT,
             )
-        print connection.read()
-        
-        print "Send mac address %s success." % (userId)
+        connection.read()
     except Exception, e:
-        print "Send mac address %s failed" % (userId)
+        print e
         
 class TrayIcon(object):
     '''Tray icon.'''
@@ -72,7 +69,6 @@ class TrayIcon(object):
         self.times = 20
         self.ticker = 0
         self.interval = 100     # in milliseconds
-        self.tooltipPixbuf = gtk.gdk.pixbuf_new_from_file("../icon/window.png")
         
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # make sure socket port always work
@@ -106,6 +102,7 @@ class TrayIcon(object):
                                                         (__("There are %s software packages can be upgraded") % (self.updateNum))))
         
         self.tooltipEventBox.add(label)
+        self.tooltipWindow.queue_draw()
         self.tooltipWindow.show_all()
     
     def cursorInIcon(self):
@@ -162,7 +159,7 @@ class TrayIcon(object):
             self.tooltipWindow = gtk.Window(gtk.WINDOW_TOPLEVEL)
             self.tooltipWindow.set_decorated(False)
             self.tooltipWindow.set_default_size(self.TOOLTIP_WIDTH, self.TOOLTIP_HEIGHT)
-            self.tooltipWindow.connect("size-allocate", lambda w, a: self.updateShape(w, a))
+            self.tooltipWindow.connect("size-allocate", lambda w, a: updateShape(w, a, 4))
             
             self.tooltipEventBox = gtk.EventBox()
             self.tooltipEventBox.connect("button-press-event", lambda w, e: self.showSoftwareCenter())
@@ -179,21 +176,9 @@ class TrayIcon(object):
             tooltipY = iconRect.y + iconRect.height + self.TOOLTIP_OFFSET_Y
         self.tooltipWindow.set_opacity(0.9)
         self.tooltipWindow.move(tooltipX, tooltipY)
+        self.tooltipWindow.queue_draw()
         self.tooltipWindow.show_all()
         
-    def updateShape(self, widget, allocation):
-        '''Update shape.'''
-        if allocation.width > 0 and allocation.height > 0:
-            
-            width, height = allocation.width, allocation.height
-            
-            pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, True, 8, width, height)
-            self.tooltipPixbuf.copy_area(0, 0, width, height, pixbuf, 0, 0)
-
-            (_, mask) = pixbuf.render_pixmap_and_mask(255)
-            if mask != None:
-                self.tooltipWindow.shape_combine_mask(mask, 0, 0)
-                
     @postGUI
     def finishCheck(self):
         '''Finish check.'''

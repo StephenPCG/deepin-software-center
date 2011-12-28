@@ -559,7 +559,7 @@ class AppInfoItem(DownloadItem):
             self.itemInfoBox.pack_start(self.voteAlign)
             self.itemInfoBox.reorder_child(self.voteAlign, 0)
             (vote, voteNum) = voteJson[self.pkgName]
-            self.starView = StarView(vote, 20)
+            self.starView = StarView(float(vote), 20, False)
             self.voteBox.pack_start(self.starView.eventbox, False, False)
             
             if (int(voteNum) > 0):
@@ -1060,9 +1060,9 @@ class SmallScreenshot(td.Thread):
             cmdline.append("--continue=true")
             
         # Append proxy configuration.
-        proxyString = utils.parseProxyString()
-        if proxyString != None:
-            cmdline.append("=".join(["--all-proxy", proxyString]))
+        # proxyString = utils.parseProxyString()
+        # if proxyString != None:
+        #     cmdline.append("=".join(["--all-proxy", proxyString]))
         
         self.proc = subprocess.Popen(cmdline)
         self.proc.wait()

@@ -25,7 +25,6 @@ from lang import __, getDefaultLanguage, DEFAULT_LANG
 from math import pi
 import cairo
 import gtk
-import hashlib
 import locale
 import math
 import os
@@ -385,6 +384,15 @@ def getAria2Version():
     
     return (int(versionList[0]), int(versionList[1]), int(versionList[2]))
 
+def getOSVersion():
+    '''Get OS version.'''
+    versionInfos = getCommandOutputFirstLine(["lsb_release", "-i"]).split()
+    
+    if len(versionInfos) > 0:
+        return versionInfos[-1]
+    else:
+        return ""
+
 def compareCandidates((preA, matchA, restA, pkgA), (preB, matchB, restB, pkgB)):
     '''Compare candidates.'''
     lenA = len(preA)
@@ -538,11 +546,16 @@ def removeDirectory(path):
             os.remove(fullPath)
     os.rmdir(path)        
 
-def getUserID():
-    '''Get Mac Address and MD5.'''
-    macAddress = uuid.getnode()
-    return (hashlib.md5(str(macAddress))).hexdigest()
-
+def getUniqueId():
+    '''Get unique id.'''
+    uniqueId = evalFile("./uuid", True)
+    if uniqueId:
+        return uniqueId
+    else:
+        uId = int(uuid.uuid1()) # this is unique id of current hardware and time, so it's very safe for user. :)
+        writeFile("./uuid", str(uId))
+        return uId
+        
 def getLastUpdateHours(filepath):
     """
     Return the number of hours since last update.

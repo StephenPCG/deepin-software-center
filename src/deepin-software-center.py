@@ -536,6 +536,9 @@ class DeepinSoftwareCenter(object):
 
                     # Add in uninstall list.
                     self.updateUninstallView(pkgName, not isMarkDeleted)
+                    
+                    # Save upgrade number.
+                    self.saveUpgradeNum()
                 else:
                     print "Impossible: %s not in RepoCache" % (pkgName)
         elif actionType == ACTION_UNINSTALL:
@@ -933,6 +936,9 @@ class DeepinSoftwareCenter(object):
         '''Execute after init thread finish.'''
         # Select default page.
         self.selectPage(self.defaultPageId, False)
+        
+        # Save upgrade number.
+        self.saveUpgradeNum()
 
         # Update List.
         self.updateList.start()
@@ -944,6 +950,11 @@ class DeepinSoftwareCenter(object):
         # So use `gtk.window.set_keep_above` instead.
         self.window.set_keep_above(True)
         self.window.set_keep_above(False)
+        
+    def saveUpgradeNum(self):
+        '''Save upgrade number.'''
+        upgradeNum = self.repoCache.getUpgradableNum()
+        writeFile("./upgradeNum", str(upgradeNum))
 
     def selectPage(self, pageId, hideWindow=True):
         '''Select recommend page.'''
@@ -1253,8 +1264,25 @@ class InitThread(td.Thread):
         apt_pkg.init()
         center.aptCache = apt.Cache()
         
+        # Get update data directory.
+        osVersion = getOSVersion()
+        if osVersion == OS_VERSION:
+            if os.path.exists(UPDATE_DATA_DIR):
+                center.updateDataDir = UPDATE_DATA_DIR
+                # center.updateDataDir = UPDATE_DATA_BACKUP_DIR
+                print "Use newest data from %s" % UPDATE_DATA_DIR
+            else:
+                center.updateDataDir = UPDATE_DATA_BACKUP_DIR
+                print "Haven't found directory: %s, use %s instead" % (UPDATE_DATA_DIR, UPDATE_DATA_BACKUP_DIR)
+        else:
+            center.updateDataDir = UPDATE_DATA_BACKUP_DIR
+            print "Your system is not %s, deepin software center won't update `recommend list` to keep your system safety, if you want deepin software center update `recommend list` on your system, please contact AUTHOR (lazycat.manatee@gmail.com)." % OS_VERSION
+        
         # Init repo cache.
-        center.repoCache = repoCache.RepoCache(center.aptCache)
+        center.repoCache = repoCache.RepoCache(
+            center.aptCache,
+            center.updateDataDir,
+            )
         
         # Init update list.
         center.updateList = updateList.UpdateList(center.aptCache, center.statusbar)       
@@ -1286,6 +1314,7 @@ class InitThread(td.Thread):
             center.entryDetailView,
             center.selectCategory,
             center.launchApplication,
+            center.updateDataDir,
             )
         center.repoPage = repoPage.RepoPage(
             center.repoCache,
@@ -1459,6 +1488,8 @@ class SendUninstallCount(td.Thread):
         except Exception, e:
             print "Send uninstall count (%s) failed." % (self.pkgName)
             print "Error: ", e
+            
+            
         
 if __name__ == "__main__":
     DeepinSoftwareCenter().main()
