@@ -8,5 +8,5 @@ AUTHORS /usr/share/deepin-software-center
 ChangeLog /usr/share/deepin-software-center
 COPYING /usr/share/deepin-software-center
 README /usr/share/deepin-software-center
-deepin-software-center.desktop /usr/share/applications
-deepin-check-update.desktop /etc/xdg/autostart
+debian/deepin-software-center.desktop /usr/share/applications
+debian/deepin-check-update.desktop /etc/xdg/autostart
