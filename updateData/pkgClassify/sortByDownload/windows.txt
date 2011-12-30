@@ -1,3 +1,9 @@
+deepinwine-qq2010
+deepinwine-thunder5
+deepinwine-rtx2010
+deepinwine-picasa
+deepinwine-cajviewer
+deepinwine-qq2009
 deepin-wine-tm2009
 deepin-wine-rtx2010
 wine-thunder
