@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,44 +22,47 @@
 
 from constant import *
 from draw import *
+from lang import __, getDefaultLanguage
 import gtk
-import pygtk
 import utils
-pygtk.require('2.0')
 
-class CategoryBar:
+class CategoryBar(object):
     '''Category bar to list software.'''
 	
-    def __init__(self, categoryList, func):
+    def __init__(self, categoryList, getCategoryNumCallback, func):
         '''Init for category bar.'''
         # Init.
+        self.getCategoryNumCallback = getCategoryNumCallback
         self.box = gtk.VBox()
         self.callback = func
         self.paddingTop = 5
         self.paddingBottom = 5
         self.paddingLeft = 20
         self.paddingX = 10
+        (self.categoryName, _) = categoryList[0]
         self.categoryId = 0
         
         # Create category icon.
         for (index, (categoryName, categoryIcon)) in enumerate(categoryList):
-            icon = self.createCategoryIcon(categoryName, "./icons/category/" + categoryIcon, index)
+            icon = self.createCategoryIcon(categoryName, "category/" + categoryIcon, index)
             self.box.pack_start(icon)
         
         # Show.
         self.box.show_all()
         
-    def createCategoryIcon(self, iconName, iconPath, categoryId):
+    def createCategoryIcon(self, categoryName, iconPath, categoryId):
         '''Create category icon.'''
         # Create icon.
         eventButton = gtk.Button()
-        eventButton.connect("button-press-event", lambda widget, event: self.callback(iconName, categoryId))
+        eventButton.connect("button-press-event", lambda widget, event: self.callback(categoryName, categoryId))
         sideButtonSetBackground(
             eventButton,
-            iconName, iconPath,
-            "./icons/category/sidebar_normal.png",
-            "./icons/category/sidebar_hover.png",
-            "./icons/category/sidebar_press.png",
+            categoryName, 
+            iconPath,
+            "category/sidebar_normal.png",
+            "category/sidebar_hover.png",
+            "category/sidebar_press.png",
+            self.getCategoryNumCallback,
             categoryId,
             self.getCategoryId
             )

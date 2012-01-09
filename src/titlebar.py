@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,15 +22,14 @@
 
 from constant import *
 from draw import *
+from lang import __, getDefaultLanguage
 import gtk
-import pygtk
 import utils
-pygtk.require('2.0')
 
-class Titlebar:
+class Titlebar(object):
     '''Title bar.'''
 	
-    def __init__(self, minCallback, maxCallback, closeCallback):
+    def __init__(self, selectThemeCallback, showMoreWindowCallback, minCallback, maxCallback, closeCallback):
         '''Init for title bar.'''
         self.box = gtk.VBox()
         
@@ -39,6 +38,16 @@ class Titlebar:
         self.controlAlign.set(1.0, 0.0, 0.0, 0.0)
         self.controlAlign.add(self.controlBox)
         self.box.add(self.controlAlign)
+        
+        self.themeButton = gtk.Button()
+        self.themeButton.connect("button-release-event", lambda w, e: selectThemeCallback(w, e))
+        drawButton(self.themeButton, "theme", "navigate")
+        self.controlBox.pack_start(self.themeButton, False, False)
+
+        self.moreButton = gtk.Button()
+        self.moreButton.connect("button-release-event", lambda w, e: showMoreWindowCallback(w, e))
+        drawButton(self.moreButton, "more", "navigate")
+        self.controlBox.pack_start(self.moreButton, False, False)
         
         self.minButton = gtk.Button()
         self.minButton.connect("button-release-event", lambda w, e: minCallback())

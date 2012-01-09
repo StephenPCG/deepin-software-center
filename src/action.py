@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 #
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,13 +21,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from constant import *
+from lang import __, getDefaultLanguage
 import apt
 import apt.progress.base as apb
-import threading as td
-import socket
-import utils
-import subprocess
 import os
+import subprocess
+import threading as td
+import utils
 
 class InstallProgress(apb.InstallProgress):
     '''Install progress.'''
@@ -54,11 +54,11 @@ class InstallProgress(apb.InstallProgress):
     def start_update(self):
         '''Start update.'''
         if self.actionType == ACTION_INSTALL:
-            self.updateCallback(self.actionType, self.pkgName, 0, "开始安装")
+            self.updateCallback(self.actionType, self.pkgName, 0, __("Action Install Start"))
         elif self.actionType == ACTION_UPGRADE:
-            self.updateCallback(self.actionType, self.pkgName, 0, "开始升级")
+            self.updateCallback(self.actionType, self.pkgName, 0, __("Action Update Start"))
         elif self.actionType == ACTION_UNINSTALL:
-            self.updateCallback(self.actionType, self.pkgName, 0, "开始卸载")
+            self.updateCallback(self.actionType, self.pkgName, 0, __("Action Uninstall Start"))
 
     def status_change(self, pkg, percent, status):
         '''Progress status change.'''
@@ -109,18 +109,9 @@ class Action(td.Thread):
             # Call finish callback if action commit successfully.
             self.finish()
         except Exception, e:
-            print "Got error `%s` when commit apt action." % (e)
+            print "Got error `%s` when commit apt action." % (str(e))
             
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  
-            try:
-                s.bind(SOCKET_UPDATEMANAGER_ADDRESS)
-                s.close()
-                
-                self.messageCallback("%s: 安装失败, 请确保没有其他APT进程在运行." % self.pkgName)
-            except Exception, e:
-                s.close()
-                
-                self.messageCallback("%s: 安装失败, 更新管理器正在运行." % self.pkgName)
+            self.messageCallback("%s: %s" % (self.pkgName, __("Action Install Failed")))
             
             # Call failed callback.
             self.failed()
@@ -135,11 +126,11 @@ class Action(td.Thread):
     def finish(self):
         '''Progress finish update.'''
         if self.actionType == ACTION_INSTALL:
-            self.updateCallback(self.actionType, self.pkgName, 100, "安装完毕")
+            self.updateCallback(self.actionType, self.pkgName, 100, __("Action Install Finish"))
         elif self.actionType == ACTION_UPGRADE:
-            self.updateCallback(self.actionType, self.pkgName, 100, "升级完毕")
+            self.updateCallback(self.actionType, self.pkgName, 100, __("Action Update Finish"))
         elif self.actionType == ACTION_UNINSTALL:
-            self.updateCallback(self.actionType, self.pkgName, 100, "卸载完毕")
+            self.updateCallback(self.actionType, self.pkgName, 100, __("Action Uninstall Finish"))
         
         self.scanCallback(self.pkgName, self.actionType)
         self.finishCallback(self.actionType, self.pkgList)
@@ -147,16 +138,16 @@ class Action(td.Thread):
     def failed(self):
         '''Action failed.'''
         if self.actionType == ACTION_INSTALL:
-            self.updateCallback(self.actionType, self.pkgName, 100, "安装失败")
+            self.updateCallback(self.actionType, self.pkgName, 100, __("Action Install Failed"))
         elif self.actionType == ACTION_UPGRADE:
-            self.updateCallback(self.actionType, self.pkgName, 100, "升级失败")
+            self.updateCallback(self.actionType, self.pkgName, 100, __("Action Update Failed"))
         elif self.actionType == ACTION_UNINSTALL:
-            self.updateCallback(self.actionType, self.pkgName, 100, "卸载失败")
+            self.updateCallback(self.actionType, self.pkgName, 100, __("Action Uninstall Failed"))
         
         self.scanCallback(self.pkgName, self.actionType)
         self.failedCallback(self.actionType, self.pkgName)
         
-class ActionQueue:
+class ActionQueue(object):
     '''Action queue.'''
 
     def __init__(self, updateCallback, finishCallback, failedCallback, messageCallback):
@@ -165,6 +156,7 @@ class ActionQueue:
         self.lock = False
         self.queue = []
         self.pkgName = None
+        self.actionType = None
         self.updateCallback = updateCallback
         self.finishCallback = finishCallback
         self.failedCallback = failedCallback
@@ -177,6 +169,7 @@ class ActionQueue:
         
         # Init.
         self.pkgName = pkgName
+        self.actionType = actionType
 
         # Start action.
         action = Action(pkgName, actionType,
@@ -199,8 +192,7 @@ class ActionQueue:
     def finishAction(self, pkgName, actionType):
         '''Finish action, start new action if have action in queue.'''
         # Remove finish action.
-        if (pkgName, actionType) in self.queue:
-            self.queue.remove((pkgName, actionType))
+        utils.removeFromList(self.queue, (pkgName, actionType))
 
         # Start new action if queue has other request.
         if len(self.queue) > 0:
@@ -211,11 +203,18 @@ class ActionQueue:
         else:
             self.lock = False
             self.pkgName = None
+            self.actionType = None
 
     def getActionPkgs(self):
         '''Get action packages.'''
         if self.pkgName == None:
             return map (lambda (pn, _): pn, self.queue)
         else:
-            return (map (lambda (pn, _): pn, self.queue)) + [self.pkgName]
-     
+            return [self.pkgName] + (map (lambda (pn, _): pn, self.queue))
+
+    def getActionQueue(self):
+        '''Get action queue.'''
+        if self.pkgName == None:
+            return map (lambda action: action, self.queue)
+        else:
+            return [(self.pkgName, self.actionType)] + (map (lambda action: action, self.queue))

@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,13 +22,13 @@
 
 from constant import *
 from draw import *
+from lang import __, getDefaultLanguage
+from theme import *
 import cairo
 import gtk
-import pygtk
 import utils
-pygtk.require('2.0')
 
-class Statusbar:
+class Statusbar(object):
     '''Status bar.'''
 	
     def __init__(self):
@@ -36,12 +36,16 @@ class Statusbar:
         # Init.
         self.paddingX = 10
         self.paddingY = 5
-        self.eventbox = gtk.EventBox()
         
-        eventBoxSetBackground(
+        self.eventbox = gtk.EventBox()
+        drawStatusbarBackground(
             self.eventbox,
-            True, False,
-            "./icons/statusbar/background.png")
+            appTheme.getDynamicPixbuf("statusbar/background.png"),
+            appTheme.getDynamicDrawType("statusbar"),
+            appTheme.getDynamicAlphaColor("frameLigtht"),
+            appTheme.getDynamicAlphaColor("statusbarTop"),
+            )
+        
         self.box = gtk.HBox()
         
         self.name = gtk.Label()
@@ -52,18 +56,20 @@ class Statusbar:
         self.nameAlignment.add(self.name)
         self.box.pack_start(self.nameAlignment)
         
-        self.join = gtk.Label()
-        self.join.set_markup("<span foreground='#FFFFFF' size='%s' underline='single'>加入我们</span>" % (LABEL_FONT_SIZE))
-        self.joinAlignment = gtk.Alignment()
-        self.joinAlignment.set_padding(self.paddingY, self.paddingY, self.paddingX, self.paddingX)
-        self.joinAlignment.set(1.0, 0.0, 0.0, 1.0)
-        self.joinAlignment.add(self.join)
-        self.joinBox = gtk.EventBox()
-        self.joinBox.set_visible_window(False)
-        self.joinBox.add(self.joinAlignment)
-        self.joinBox.connect("button-press-event", lambda w, e: utils.runCommand("xdg-open http://www.linuxdeepin.com/job-offers"))
-        self.box.pack_start(self.joinBox)
-        utils.setClickableCursor(self.joinBox)
+        self.joinUs = gtk.Label()
+        self.joinUs.set_markup("<span foreground='%s' size='%s'>%s</span>" % (
+                appTheme.getDynamicColor("statusText").getColor(),
+                LABEL_FONT_SIZE, __("Join Us")))
+        self.joinUsEventBox = gtk.EventBox()
+        self.joinUsEventBox.set_visible_window(False)
+        self.joinUsEventBox.add(self.joinUs)
+        self.joinUsEventBox.connect("button-press-event", lambda w, e: sendCommand("xdg-open http://www.linuxdeepin.com/recruitment"))
+        setClickableCursor(self.joinUsEventBox)
+        self.joinUsAlign = gtk.Alignment()
+        self.joinUsAlign.set_padding(0, 0, 0, self.paddingX)
+        self.joinUsAlign.set(1.0, 0.5, 0.0, 0.0)
+        self.joinUsAlign.add(self.joinUsEventBox)
+        self.box.pack_start(self.joinUsAlign)
         
         # Connect components.
         self.eventbox.add(self.box)
@@ -71,8 +77,15 @@ class Statusbar:
         
     def initStatus(self):
         '''Init status.'''
-        self.name.set_markup("<span foreground='#FFFFFF' size='%s'>深度Linux软件中心 %s</span>" % (LABEL_FONT_SIZE, VERSION))
+        self.name.set_markup("<span foreground='%s' size='%s'>%s %s</span>" % (
+                appTheme.getDynamicColor("statusText").getColor(),
+                LABEL_FONT_SIZE,
+                __("Deepin Software Center"), 
+                VERSION))
 
     def setStatus(self, status):
         '''Set status.'''
-        self.name.set_markup("<span foreground='#FFFFFF' size='%s'>%s</span>" % (LABEL_FONT_SIZE, status))
+        self.name.set_markup("<span foreground='%s' size='%s'>%s</span>" % (
+                appTheme.getDynamicColor("statusText").getColor(),
+                LABEL_FONT_SIZE, 
+                status))

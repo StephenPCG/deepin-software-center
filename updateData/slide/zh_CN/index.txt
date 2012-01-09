@@ -1,0 +1,1 @@
+[("chromium-browser", "谷歌浏览器"), ("audacious", "Audacious 播放器"), ("gweled", "宝石迷阵")]

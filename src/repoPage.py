@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 #
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,44 +23,52 @@
 from appItem import *
 from constant import *
 from draw import *
+from lang import __, getDefaultLanguage
+from utils import *
 import apt_pkg
 import categorybar
 import gobject
 import gtk
-import pygtk
 import repoView
 import search
 import searchCompletion as sc
 import sortedDict
 import utils
-pygtk.require('2.0')
 
-class RepoPage:
+class RepoPage(object):
     '''Interface for repository page.'''
     
     def __init__(self, repoCache, searchQuery, switchStatus, downloadQueue, entryDetailCallback, 
-                 entrySearchCallback, sendVoteCallback, fetchVoteCallback):
+                 entrySearchCallback, sendVoteCallback, fetchVoteCallback, 
+                 launchApplicationCallback):
         '''Init for repository page.'''
         # Init.
         self.repoCache = repoCache
         self.box = gtk.VBox()
-        self.categorybar = categorybar.CategoryBar(self.repoCache.getCategorys(), self.selectCategory)
+        self.categorybar = categorybar.CategoryBar(
+            self.repoCache.getCategorys(), 
+            self.repoCache.getCategoryNumber,
+            self.selectCategory,
+            )
         self.contentBox = gtk.HBox()
         self.topbar = Topbar(
             searchQuery,
             CLASSIFY_WEB, 
             self.repoCache.getCategoryNumber(CLASSIFY_WEB),
             self.repoCache.cache.values(),
-            entrySearchCallback)
+            entrySearchCallback,
+            self.updateCategory)
         self.repoView = repoView.RepoView(
             CLASSIFY_WEB, 
             self.repoCache.getCategoryNumber(CLASSIFY_WEB),
             self.repoCache.getAppList,
+            self.topbar.getSortType,
             switchStatus, 
             downloadQueue,
             entryDetailCallback,
             sendVoteCallback,
-            fetchVoteCallback
+            fetchVoteCallback,
+            launchApplicationCallback
             )
 
         # Connect components.
@@ -69,33 +77,35 @@ class RepoPage:
         self.contentBox.pack_start(self.categorybar.box, False, False)
         self.contentBox.pack_start(self.repoView.scrolledwindow)
         self.box.show_all()
+        
+    def updateCategory(self):
+        '''Update category.'''
+        self.selectCategory(self.categorybar.categoryName,
+                            self.categorybar.categoryId)
 
-    def selectCategory(self, category, categoryId):
+    def selectCategory(self, categoryName, categoryId):
         '''Select category.'''
+        self.categorybar.categoryName = categoryName
         self.categorybar.categoryId = categoryId
         self.categorybar.box.queue_draw()
         
-        # Redraw sub-categorybar bar.
-        self.topbar.updateTopbar(
-            category,
-            self.repoCache.getCategoryNumber(category)
-            )
-        
         # Update application view.
         self.repoView.update(
-            category, 
-            self.repoCache.getCategoryNumber(category)
+            categoryName, 
+            self.repoCache.getCategoryNumber(categoryName)
             )
 
         # Reset repoView's index.
         self.repoView.setSelectItemIndex(0)
 
-class Topbar:
+class Topbar(object):
     '''Top bar.'''
-	
+
+    SORT_BOX_PADDING_X = 50
     SEARCH_ENTRY_WIDTH = 300
     
-    def __init__(self, searchQuery, category, itemNum, appInfos, entrySearchCallback):
+    def __init__(self, searchQuery, category, itemNum, appInfos, 
+                 entrySearchCallback, updateCategoryCallback):
         '''Init for top bar.'''
         self.searchQuery = searchQuery
         self.paddingX = 5
@@ -107,23 +117,66 @@ class Topbar:
         self.eventbox = gtk.EventBox()
         self.eventbox.add(self.boxAlign)
         drawTopbar(self.eventbox)
-        self.categoryLabel = gtk.Label()
         self.numLabel = gtk.Label()
-        self.updateTopbar(category, itemNum)
         self.entrySearchCallback = entrySearchCallback
+        self.updateCategoryCallback = updateCategoryCallback
+        
+        # Add classify number.
+        self.box.pack_start(self.numLabel)
+        
+        # Add sort buttons.
+        self.sortBox = gtk.HBox()
+        self.sortAlign = gtk.Alignment()
+        self.sortAlign.set(0.0, 0.5, 1.0, 1.0)
+        self.sortAlign.add(self.sortBox)
+        
+        self.sortRecommendId = "sortRecommend"
+        self.sortDownloadId = "sortDownload"
+        self.sortVoteId = "sortVote"
+        self.sortType = self.sortRecommendId
 
+        (self.sortRecommendBox, self.sortRecommendEventBox) = setDefaultRadioButton(
+            __("Sort By Recommend"), self.sortRecommendId, self.setSortType, self.getSortType, self.updateRadioStatus
+            )
+
+        (self.sortDownloadBox, self.sortDownloadEventBox) = setDefaultRadioButton(
+            __("Sort By Download"), self.sortDownloadId, self.setSortType, self.getSortType, self.updateRadioStatus
+            )
+        
+        (self.sortVoteBox, self.sortVoteEventBox) = setDefaultRadioButton(
+            __("Sort By Vote"), self.sortVoteId, self.setSortType, self.getSortType, self.updateRadioStatus
+            )
+        
+        self.sortButtonPaddingX = 10
+        self.sortBox.pack_start(self.sortRecommendBox, False, False, self.sortButtonPaddingX)
+        self.sortBox.pack_start(self.sortDownloadBox, False, False, self.sortButtonPaddingX)
+        self.sortBox.pack_start(self.sortVoteBox, False, False, self.sortButtonPaddingX)
+        self.box.pack_start(self.sortAlign)
+        
         # Add search entry and label.
         (self.searchEntry, searchAlign, self.searchCompletion) = newSearchUI(
-            "请输入你要搜索的软件名称、版本或其他信息",
-            lambda text: utils.getCandidates(map (lambda appInfo: appInfo.pkg.name, appInfos), text),
+            __("Please enter the name you want to search for software, version or other information"),
+            lambda text: getCandidates(map (lambda appInfo: appInfo.pkg.name, appInfos), text),
             self.clickCandidate,
             self.search)
-        
-        # Connect widgets.
-        self.box.pack_start(self.categoryLabel, False, False, self.paddingX)
-        self.box.pack_start(self.numLabel, False, False, self.paddingX)
         self.box.pack_start(searchAlign)
         
+    def updateRadioStatus(self):
+        '''Update radio status.'''
+        self.sortRecommendEventBox.queue_draw()    
+        self.sortDownloadEventBox.queue_draw()    
+        self.sortVoteEventBox.queue_draw()    
+        
+        self.updateCategoryCallback()
+        
+    def setSortType(self, sType):
+        '''Set sort type.'''
+        self.sortType = sType
+        
+    def getSortType(self):
+        '''Get sort type.'''
+        return self.sortType
+    
     def search(self, editable):
         '''Search'''
         content = self.searchEntry.get_chars(0, -1)
@@ -137,14 +190,5 @@ class Topbar:
         '''Click candidate.'''
         keyword = self.searchEntry.get_chars(0, -1)
         self.entrySearchCallback(PAGE_REPO, keyword, [candidate])
-        
-    def updateTopbar(self, category, itemNum):
-        '''Set number label.'''
-        self.categoryLabel.set_markup("<span foreground='#1A3E88' size='%s'><b>%s</b></span>" % (LABEL_FONT_SIZE, category))
-        self.numLabel.set_markup(
-            ("<span size='%s'>共</span>" % (LABEL_FONT_SIZE))
-            + "<span foreground='#006efe' size='%s'> %s</span>" % (LABEL_FONT_SIZE, str(itemNum))
-            + ("<span size='%s'> 款软件</span>" % (LABEL_FONT_SIZE)))
-    
 
 #  LocalWords:  categorybar repoView's sortAlign efe

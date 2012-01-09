@@ -1,2 +1,13 @@
 *.pyc
+proxy
+defaultTheme
+screenshotTimestamp
+ignorePkgs
 firstLock
+voteInfo
+nohup.out
+cookie.txt
+voteBlacklist/
+.#*
+uuid
+upgradeNum

@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,12 +23,13 @@
 from appItem import *
 from constant import *
 from draw import *
+from lang import __, getDefaultLanguage
+from theme import *
 import appView
+import glib
 import gtk
 import pango
-import pygtk
 import utils
-pygtk.require('2.0')
 
 class UpdateItem(DownloadItem):
     '''Application item.'''
@@ -46,7 +47,8 @@ class UpdateItem(DownloadItem):
     def __init__(self, appInfo, switchStatus, downloadQueue, 
                  entryDetailCallback, sendVoteCallback,
                  index, getSelectIndex, setSelectIndex,
-                 selectPkgCallback, unselectPkgCallback, getSelectStatusCallback):
+                 selectPkgCallback, unselectPkgCallback, 
+                 getSelectStatusCallback, addIgnorePkgCallback):
         '''Init for application item.'''
         DownloadItem.__init__(self, appInfo, switchStatus, downloadQueue)
         
@@ -56,6 +58,7 @@ class UpdateItem(DownloadItem):
         self.selectPkgCallback = selectPkgCallback
         self.unselectPkgCallback = unselectPkgCallback
         self.getSelectStatusCallback = getSelectStatusCallback
+        self.addIgnorePkgCallback = addIgnorePkgCallback
         self.checkButton = None
         self.index = index
         self.setSelectIndex = setSelectIndex
@@ -76,24 +79,26 @@ class UpdateItem(DownloadItem):
         self.itemFrame.add(self.itemEventBox)
         
         # Add check box.
-        checkPadding = 10
+        checkPaddingLeft = 20
+        checkPaddingRight = 15
+        checkPaddingY = 10
         self.checkButton = gtk.CheckButton()
         self.checkButton.set_active(self.getSelectStatusCallback(utils.getPkgName(self.appInfo.pkg)))
         self.checkButton.connect("toggled", lambda w: self.toggleSelectStatus())
         checkButtonSetBackground(
             self.checkButton,
             False, False, 
-            "./icons/cell/select.png",
-            "./icons/cell/selected.png",
+            "cell/select.png",
+            "cell/selected.png",
             )
         self.checkAlign = gtk.Alignment()
         self.checkAlign.set(0.5, 0.5, 0.0, 0.0)
-        self.checkAlign.set_padding(checkPadding, checkPadding, checkPadding, checkPadding)
+        self.checkAlign.set_padding(checkPaddingY, checkPaddingY, checkPaddingLeft, checkPaddingRight)
         self.checkAlign.add(self.checkButton)
         self.itemBox.pack_start(self.checkAlign, False, False)
         
-        self.appBasicBox = createItemBasicBox(self.appInfo, 560, self.itemBox, self.entryDetailView, False) 
-        self.itemBox.pack_start(self.appBasicBox, True, True)
+        self.appBasicView = AppBasicView(self.appInfo, 300 + APP_BASIC_WIDTH_ADJUST, self.itemBox, self.entryDetailView) 
+        self.itemBox.pack_start(self.appBasicView.align, True, True)
         
         self.appAdditionBox = gtk.HBox()
         self.appAdditionAlign = gtk.Alignment()
@@ -147,92 +152,69 @@ class UpdateItem(DownloadItem):
         # Clean right box first.
         utils.containerRemoveAll(self.appAdditionBox)
         
-        # Add application version.
-        currentVersion = pkg.installed.version
-        if len(pkg.versions) == 0:
-            upgradeVersion = "错误的版本, 请报告错误！"
-        else:
-            upgradeVersion = pkg.versions[0].version
-            
-        versionBox = gtk.VBox()
-        versionAlign = gtk.Alignment()        
-        versionAlign.set(0.0, 0.5, 0.0, 0.0)
-        versionAlign.add(versionBox)
-        self.appAdditionBox.pack_start(versionAlign, True, True, self.APP_RIGHT_PADDING_X)
-        
-        currentVersionBox = gtk.HBox()
-        versionBox.pack_start(currentVersionBox, False, False)
-        
-        currentVersionName = gtk.Label()
-        currentVersionName.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, "当前版本: "))
-        currentVersionBox.pack_start(currentVersionName, False, False)
-        
-        currentVersionNum = gtk.Label()
-        currentVersionNum.set_ellipsize(pango.ELLIPSIZE_MIDDLE)
-        currentVersionNum.set_markup("<span foreground='#7d8087' size='%s'>%s</span>" % (LABEL_FONT_SIZE, currentVersion))
-        currentVersionNum.set_size_request(self.VERSION_LABEL_WIDTH, -1)
-        currentVersionNum.set_alignment(0.0, 0.5)
-        currentVersionBox.pack_start(currentVersionNum, False, False)
-        
-        upgradeVersionBox = gtk.HBox()
-        versionBox.pack_start(upgradeVersionBox, False, False)
-        
-        upgradeVersionName = gtk.Label()
-        upgradeVersionName.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, "升级版本: "))
-        upgradeVersionBox.pack_start(upgradeVersionName, False, False)
-        
-        upgradeVersionNum = gtk.Label()
-        upgradeVersionNum.set_ellipsize(pango.ELLIPSIZE_MIDDLE)
-        upgradeVersionNum.set_markup("<span foreground='#006efe' size='%s'>%s</span>" % (LABEL_FONT_SIZE, upgradeVersion))
-        upgradeVersionNum.set_size_request(self.VERSION_LABEL_WIDTH, -1)
-        upgradeVersionNum.set_alignment(0.0, 0.5)
-        upgradeVersionBox.pack_start(upgradeVersionNum, False, False)
-            
-        # Add application size.
-        size = utils.getPkgSize(pkg)
-        appSize = gtk.Label()
-        appSize.set_size_request(self.SIZE_LABEL_WIDTH, -1)
-        appSize.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, utils.formatFileSize(size)))
-        appSize.set_alignment(1.0, 0.5)
-        self.appAdditionBox.pack_start(appSize, False, False, self.APP_RIGHT_PADDING_X)
-        
         # Add application vote information.
         self.appVoteView = VoteView(
             self.appInfo, PAGE_UPGRADE, 
-            self.entryDetailCallback,
             self.sendVoteCallback)
         self.appAdditionBox.pack_start(self.appVoteView.eventbox, False, False)
+        
+        # Add application size.
+        size = utils.getPkgSize(pkg)
+
+        appSizeLabel = DynamicSimpleLabel(
+            self.appAdditionBox,
+            utils.formatFileSize(size),
+            appTheme.getDynamicColor("appSize"),
+            LABEL_FONT_SIZE,
+            )
+        appSize = appSizeLabel.getLabel()
+        
+        appSize.set_size_request(self.SIZE_LABEL_WIDTH, -1)
+        appSize.set_alignment(1.0, 0.5)
+        self.appAdditionBox.pack_start(appSize, False, False, self.APP_RIGHT_PADDING_X)
+        
+        # Add ignore button.
+        (ignoreLabel, ignoreEventBox) = setDefaultClickableDynamicLabel(
+            __("Don't Notify"),
+            "appIgnore",
+            )
+        self.appAdditionBox.pack_start(ignoreEventBox, False, False)
+        ignoreEventBox.connect("button-press-event", 
+                               lambda w, e: self.addIgnorePkgCallback(utils.getPkgName(pkg)))
         
         # Add action button.
         (actionButtonBox, actionButtonAlign) = createActionButton()
         self.appAdditionBox.pack_start(actionButtonAlign, False, False)
         
         (appButton, appButtonAlign) = newActionButton(
-            "update", 0.5, 0.5, "cell", False, "升级", BUTTON_FONT_SIZE_SMALL)
+            "update", 0.5, 0.5, "cell", False, __("Action Update"), BUTTON_FONT_SIZE_SMALL, "buttonFont")
         appButton.connect("button-release-event", lambda widget, event: self.switchToDownloading())
         actionButtonBox.pack_start(appButtonAlign)
         
-    def updateVoteView(self, starLevel, voteNum):
+    def updateVoteView(self, starLevel, commentNum):
         '''Update vote view.'''
         if self.appInfo.status == APP_STATE_UPGRADE and self.appVoteView != None:
-            self.appVoteView.updateVote(starLevel, voteNum)
+            self.appVoteView.updateVote(starLevel, commentNum)
+            self.appBasicView.updateCommentNum(commentNum)
                 
 class UpdateView(appView.AppView):
     '''Application view.'''
 	
-    def __init__(self, repoCache, appNum, getListFunc, switchStatus, downloadQueue, 
-                 entryDetailCallback, sendVoteCallback, fetchVoteCallback):
+    def __init__(self, repoCache, switchStatus, downloadQueue, 
+                 entryDetailCallback, sendVoteCallback, fetchVoteCallback, addIgnorePkgCallback):
         '''Init for application view.'''
+        appNum = repoCache.getUpgradableNum()
         appView.AppView.__init__(self, appNum, PAGE_UPGRADE)
         
         # Init.
         self.repoCache = repoCache
-        self.getListFunc = getListFunc
+        self.getListFunc = self.repoCache.getUpgradableAppList
         self.switchStatus = switchStatus
         self.downloadQueue = downloadQueue
         self.entryDetailCallback = entryDetailCallback
         self.sendVoteCallback = sendVoteCallback
         self.fetchVoteCallback = fetchVoteCallback
+        self.addIgnorePkgCallback = addIgnorePkgCallback
         self.itemDict = {}
         
         # Init select list.
@@ -241,38 +223,6 @@ class UpdateView(appView.AppView):
             self.selectList.append(pkgName)
         
         self.show()
-        
-    def selectPkg(self, pkgName):
-        '''Select package.'''
-        if not pkgName in self.selectList:
-            self.selectList.append(pkgName)
-            
-    def unselectPkg(self, pkgName):
-        '''Un-select package.'''
-        if pkgName in self.selectList:
-            self.selectList.remove(pkgName)
-            
-    def getSelectStatus(self, pkgName):
-        '''Get select status of package.'''
-        return pkgName in self.selectList    
-    
-    def selectAllPkg(self):
-        '''Select all packages.'''
-        for pkgName in self.repoCache.upgradablePkgs:
-            self.selectPkg(pkgName)
-            if self.itemDict.has_key(pkgName):
-                self.itemDict[pkgName].checkButton.set_active(True)
-                
-    def unselectAllPkg(self):
-        '''Unselect all packages.'''
-        for pkgName in self.repoCache.upgradablePkgs:
-            self.unselectPkg(pkgName)
-            if self.itemDict.has_key(pkgName):
-                self.itemDict[pkgName].checkButton.set_active(False)
-                
-    def getSelectList(self):
-        '''Get select package list.'''
-        return self.selectList
         
     def update(self, appNum):
         '''Update view'''
@@ -295,25 +245,30 @@ class UpdateView(appView.AppView):
         self.eventbox.add(self.box)
         
         if self.appNum == 0:
-            notifyBox = gtk.HBox()
+            if (getDefaultLanguage() == "default"):
+                paddingX = 10
+            else:
+                paddingX = 0
+            
+            notifyBox = gtk.VBox()
             notifyAlign = gtk.Alignment()
             notifyAlign.set(0.5, 0.5, 0.0, 0.0)
             notifyAlign.add(notifyBox)
             self.box.pack_start(notifyAlign)
             
-            notifyIconAlignX = 5
-            notifyIcon = gtk.image_new_from_file("./icons/update/smile.gif")
-            notifyIconAlign = gtk.Alignment()
-            notifyIconAlign.set(0.5, 1.0, 0.0, 0.0)
-            notifyIconAlign.set_padding(0, 0, notifyIconAlignX, notifyIconAlignX)
-            notifyIconAlign.add(notifyIcon)
-            notifyBox.pack_start(notifyIconAlign)
+            tipImage = gtk.image_new_from_pixbuf(
+                gtk.gdk.pixbuf_new_from_file("../icon/tips/%s/updateTip.png" % (getDefaultLanguage())))
+            tipAlign = gtk.Alignment()
+            tipAlign.set_padding(0, 0, paddingX, 0)
+            tipAlign.add(tipImage)
+            notifyBox.pack_start(tipAlign)
             
-            notifyLabel = gtk.Label()
-            notifyLabel.set_markup(
-                "<span foreground='#1A38EE' size='%s'>%s</span>"
-                % (LABEL_FONT_XXX_LARGE_SIZE, "你的系统已经是最新的. :)"))
-            notifyBox.pack_start(notifyLabel, False, False)
+            penguinImage = gtk.image_new_from_pixbuf(
+                gtk.gdk.pixbuf_new_from_file("../icon/tips/penguin.png"))
+            penguinAlign = gtk.Alignment()
+            penguinAlign.set_padding(0, 0, 0, paddingX)
+            penguinAlign.add(penguinImage)
+            notifyBox.pack_start(penguinAlign)
             
             self.box.show_all()
         else:
@@ -353,11 +308,42 @@ class UpdateView(appView.AppView):
                                  self.entryDetailCallback, 
                                  self.sendVoteCallback,
                                  index, self.getSelectItemIndex, self.setSelectItemIndex,
-                                 self.selectPkg, self.unselectPkg, self.getSelectStatus)
+                                 self.selectPkg, self.unselectPkg, self.getSelectStatus,
+                                 self.addIgnorePkgCallback)
             box.pack_start(appItem.itemFrame, False, False)
             self.itemDict[utils.getPkgName(appItem.appInfo.pkg)] = appItem
             
         return box
+        
+    def selectPkg(self, pkgName):
+        '''Select package.'''
+        utils.addInList(self.selectList, pkgName)
+            
+    def unselectPkg(self, pkgName):
+        '''Un-select package.'''
+        utils.removeFromList(self.selectList, pkgName)
+            
+    def getSelectStatus(self, pkgName):
+        '''Get select status of package.'''
+        return pkgName in self.selectList    
+    
+    def selectAllPkg(self):
+        '''Select all packages.'''
+        for pkgName in self.repoCache.upgradablePkgs:
+            self.selectPkg(pkgName)
+            if self.itemDict.has_key(pkgName):
+                self.itemDict[pkgName].checkButton.set_active(True)
+                
+    def unselectAllPkg(self):
+        '''Unselect all packages.'''
+        for pkgName in self.repoCache.upgradablePkgs:
+            self.unselectPkg(pkgName)
+            if self.itemDict.has_key(pkgName):
+                self.itemDict[pkgName].checkButton.set_active(False)
+                
+    def getSelectList(self):
+        '''Get select package list.'''
+        return self.selectList
         
 
 #  LocalWords:  efe pkgName selectList getSelectStatus selectAllPkg selectPkg

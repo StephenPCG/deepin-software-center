@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,39 +21,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from constant import *
+from lang import __, getDefaultLanguage, DEFAULT_LANG
 from math import pi
 import cairo
 import gtk
-import hashlib
 import locale
 import math
 import os
 import pango
 import pangocairo
-import pygtk
+import socket
+import stat
 import subprocess
+import threading as td
 import time
-import uuid
-pygtk.require('2.0')
 
 def isDoubleClick(event):
     '''Whether an event is double click?'''
     return event.button == 1 and event.type == gtk.gdk._2BUTTON_PRESS
 
-def getStarImg(starIndex, starLevel, starSize):
-    '''Get start pixbuf.'''
-    pixbuf = getStarPixbuf(starIndex, starLevel, starSize)
-    return gtk.image_new_from_pixbuf(pixbuf)        
-    
-def getStarPixbuf(starIndex, starLevel, starSize):
-    '''Get star pixbuf.'''
-    imgPath = getStarPath(starIndex, starLevel)
-    
-    if starSize == None:
-        return gtk.gdk.pixbuf_new_from_file(imgPath)        
-    else:
-        return gtk.gdk.pixbuf_new_from_file_at_size(imgPath, starSize, starSize)        
-    
 def getStarPath(starIndex, starLevel):
     '''Get star path.'''
     if starIndex == 1:
@@ -82,8 +68,7 @@ def getStarPath(starIndex, starLevel):
         else:
             imgPath = "star_gray.png"
             
-    imgDir = "./icons/cell/"
-    return imgDir + imgPath
+    return "cell/%s" % (imgPath)
 
 def getFontFamilies():
     '''Get all font families in system.'''
@@ -99,49 +84,96 @@ def getScreenSize(widget):
 
 def getPkgIcon(pkg, iconWidth=32, iconHeight=32):
     '''Get package icon.'''
-    iconPath = "./AppIcon/" + pkg.name + ".png"
+    iconPath = "../pkgData/AppIcon/" + pkg.name + ".png"
     if os.path.exists (iconPath):
         return gtk.image_new_from_pixbuf(gtk.gdk.pixbuf_new_from_file_at_size(iconPath, iconWidth, iconHeight))
     else:
-        return gtk.image_new_from_pixbuf(gtk.gdk.pixbuf_new_from_file_at_size("./icons/icon/appIcon.ico", 
-                                                                              iconWidth, iconHeight))
+        return gtk.image_new_from_pixbuf(gtk.gdk.pixbuf_new_from_file_at_size(
+                "../theme/default/image/icon/appIcon.ico", 
+                iconWidth, iconHeight))
 def getPkgName(pkg):
     '''Get package name.'''
     return pkg.name
 
-def evalFile(filepath):
-    '''Eval file content.'''
-    readFile = open(filepath, "r")
-    content = eval(readFile.read())
-    readFile.close()
+def printExecTime(func):
+    '''Print execute time.'''
+    def wrap(*a, **kw):
+        startTime = time.time()
+        ret = func(*a, **kw)
+        print "%s time: %s" % (str(func), time.time() - startTime)
+        return ret
+    return wrap
+
+def getPkgExecPath(pkg):
+    '''Get path of execute file.'''
+    execPath = "../pkgData/pkgPath/%s" % (pkg.name)
+    if os.path.exists(execPath):
+        execFile = open(execPath, "r")
+        content = execFile.read()
+        execFile.close()
+        
+        # Just read first line, not include return char.
+        return content.split("\n")[0]
+    else:
+        return None
     
-    return content
+def readFile(filepath, checkExists=False):
+    '''Read file.'''
+    if checkExists and not os.path.exists(filepath):
+        return ""
+    else:
+        rFile = open(filepath, "r")
+        content = rFile.read()
+        rFile.close()
+        
+        return content
+
+def readFirstLine(filepath, checkExists=False):
+    '''Read first line.'''
+    if checkExists and not os.path.exists(filepath):
+        return ""
+    else:
+        rFile = open(filepath, "r")
+        content = rFile.readline().split("\n")[0]
+        rFile.close()
+        
+        return content
+
+def evalFile(filepath, checkExists=False):
+    '''Eval file content.'''
+    if checkExists and not os.path.exists(filepath):
+        return None
+    else:
+        try:
+            readFile = open(filepath, "r")
+            content = eval(readFile.read())
+            readFile.close()
+            
+            return content
+        except Exception, e:
+            print e
+            
+            return None
+
+def writeFile(filepath, content):
+    '''Write file.'''
+    f = open(filepath, "w")
+    f.write(content)
+    f.close()
 
 def getPkgShortDesc(pkg):
     '''Get package's short description.'''
-    pkgPath = "./pkgInfo/" + pkg.name
+    pkgPath = "../pkgData/pkgInfo/" + pkg.name
     if os.path.exists(pkgPath):
-        lang = getDefaultLanguage()
-        if lang == "en":
-            return ((evalFile(pkgPath))["en"])["shortDesc"]
-        elif lang == "zh_TW":
-            return ((evalFile(pkgPath))["zh-TW"])["shortDesc"]
-        else:
-            return ((evalFile(pkgPath))["zh-CN"])["shortDesc"]
+        return ((evalFile(pkgPath))[getDefaultLanguage()])["shortDesc"]
     else:
         return pkg.candidate.summary
 
 def getPkgLongDesc(pkg):
     '''Get package's long description.'''
-    pkgPath = "./pkgInfo/" + pkg.name
+    pkgPath = "../pkgData/pkgInfo/" + pkg.name
     if os.path.exists(pkgPath):
-        lang = getDefaultLanguage()
-        if lang == "en":
-            return ((evalFile(pkgPath))["en"])["longDesc"]
-        elif lang == "zh_TW":
-            return ((evalFile(pkgPath))["zh-TW"])["longDesc"]
-        else:
-            return ((evalFile(pkgPath))["zh-CN"])["longDesc"]
+        return ((evalFile(pkgPath))[getDefaultLanguage()])["longDesc"]
     else:
         return pkg.candidate.description
 
@@ -150,13 +182,17 @@ def getPkgVersion(pkg):
     # Return current version if package has installed. 
     if pkg.is_installed:
         return pkg.installed.version    
-    # Otherwise return newest version.
+    # Otherwise return candidate version.
     else:
         return pkg.candidate.version
 
 def getPkgNewestVersion(pkg):
     '''Get package's newest version.'''
-    return pkg.candidate.version
+    if len(pkg.versions) == 0:
+        print "%s: length of pkg.versions equal 0." % (getPkgName(pkg))
+        return pkg.candidate.version
+    else:
+        return pkg.versions[0].version
 
 def getPkgSection(pkg):
     '''Get package's section.'''
@@ -202,15 +238,21 @@ def getPkgDependSize(cache, pkg, action):
         print "Calculate `%s` dependent used size failed, instead package's used size." % (getPkgName(pkg))
         return (pkg.candidate.size, pkg.candidate.installed_size)
 
-def getCommandOutput(commands):
+def getCommandOutputFirstLine(commands):
     '''Run command and return result.'''
     process = subprocess.Popen(commands, stdout=subprocess.PIPE)
     process.wait()
     return process.stdout.readline()
+
+def getCommandOutput(commands):
+    '''Run command and return result.'''
+    process = subprocess.Popen(commands, stdout=subprocess.PIPE)
+    process.wait()
+    return process.stdout.readlines()
     
 def getKernelPackages():
     '''Get running kernel packages.'''
-    kernelVersion = (getCommandOutput(["uname", "-r"]).split("-generic"))
+    kernelVersion = (getCommandOutputFirstLine(["uname", "-r"]).split("-generic"))
     
     return ["linux-image-generic", 
             "linux-image-%s-generic" % (kernelVersion),
@@ -280,6 +322,11 @@ def postGUI(func):
         return ret
     return wrap
 
+def printEnv():
+    '''Print environment variable.'''
+    for param in os.environ.keys():
+        print "*** %20s %s" % (param,os.environ[param])                
+
 def setProgress(progressbar, progress):
     '''Set progress.'''
     progressbar.set_fraction(progress / 100.0)
@@ -332,28 +379,19 @@ def getFontYCoordinate(y, height, fontSize):
 # So i pick version information from output of command "aria2c --version".
 def getAria2Version():
     '''Get aria2 version.'''
-    versionList = getCommandOutput(["aria2c", "--version"]).split().pop().split('.')
+    versionList = getCommandOutputFirstLine(["aria2c", "--version"]).split().pop().split('.')
     
     return (int(versionList[0]), int(versionList[1]), int(versionList[2]))
 
-def getCandidates(pkgs, text):
-    '''Get candidates.'''
-    if len(text) == 0:
-        return []
-    else:
-        # Filter match candidates.
-        candidates = []
-        for pkg in pkgs:
-            if text in pkg:
-                (preStr, matchStr, restStr) = pkg.partition(text)
-                candidates.append((preStr, matchStr, restStr, pkg))
-                
-        return map(lambda (preStr, matchStr, restStr, pkg): 
-                   # Highlight keyword.
-                   [preStr + "<span foreground='#00BBBB'><b>" + matchStr + "</b></span>" + restStr, pkg],
-                   # Sorted candidates.
-                   sorted(candidates, cmp=compareCandidates))
+def getOSVersion():
+    '''Get OS version.'''
+    versionInfos = getCommandOutputFirstLine(["lsb_release", "-i"]).split()
     
+    if len(versionInfos) > 0:
+        return versionInfos[-1]
+    else:
+        return ""
+
 def compareCandidates((preA, matchA, restA, pkgA), (preB, matchB, restB, pkgB)):
     '''Compare candidates.'''
     lenA = len(preA)
@@ -371,66 +409,19 @@ def getCurrentTime():
     '''Get current time.'''
     return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
 
-def setClickableCursor(widget):
-    '''Set click-able cursor.'''
-    # Use widget in lambda, and not widget pass in function.
-    # Otherwise, if widget free before callback, you will got error:
-    # free variable referenced before assignment in enclosing scope, 
-    widget.connect("enter-notify-event", lambda w, e: setCursor(w, gtk.gdk.HAND2))
-    widget.connect("leave-notify-event", lambda w, e: setDefaultCursor(w))
-        
-def setCursor(widget, cursorType):
-    '''Set cursor.'''
-    widget.window.set_cursor(gtk.gdk.Cursor(cursorType))
-    
-    return False
-
-def setDefaultCursor(widget):
-    '''Set default cursor.'''
-    widget.window.set_cursor(None)
-    
-    return False
-
-def setLabelMarkup(widget, label, normalMarkup, activeMarkup):
-    '''Set label markup.'''
-    widget.connect("enter-notify-event", lambda w, e: setMarkup(label, activeMarkup))
-    widget.connect("leave-notify-event", lambda w, e: setMarkup(label, normalMarkup))
-    
-def setMarkup(label, markup):
-    '''Set markup.'''
-    label.set_markup(markup)
-    
-    return False
-
-def setClickableLabel(widget, label, normalMarkup, activeMarkup, resetAfterClick=True):
-    '''Set click-able label.'''
-    # Set label markup.
-    widget.connect("enter-notify-event", lambda w, e: setMarkup(label, activeMarkup))
-    widget.connect("leave-notify-event", lambda w, e: setMarkup(label, normalMarkup))
-    
-    # Set label cursor.
-    widget.connect("enter-notify-event", lambda w, e: setCursor(w, gtk.gdk.HAND2))
-    widget.connect("leave-notify-event", lambda w, e: setDefaultCursor(w))
-    
-    # Reset color when click widget.
-    if resetAfterClick:
-        widget.connect("button-press-event", lambda w, e: setMarkup(label, normalMarkup))
-
-def setCustomizeClickableCursor(eventbox, widget, cursorPath):
-    '''Set click-able cursor.'''
-    eventbox.connect("enter-notify-event", lambda w, e: setCustomizeCursor(widget, cursorPath))
-    eventbox.connect("leave-notify-event", lambda w, e: setDefaultCursor(widget))
-        
-def setCustomizeCursor(widget, cursorPath):
-    '''Set cursor.'''
-    widget.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.display_get_default(),
-                                            gtk.gdk.pixbuf_new_from_file_at_size(cursorPath, 32, 32),
-                                            0, 0))
-    return False
-    
 def runCommand(command):
     '''Run command.'''
     subprocess.Popen("nohup %s > /dev/null 2>&1" % (command), shell=True)
+    
+def sendCommand(command):
+    '''Send command.'''
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  
+    try:
+        s.sendto(command, SOCKET_COMMANDPROXY_ADDRESS)
+    except Exception, e:
+        print "sendCommand got error: %s" % (e)
+    finally:
+        s.close()
     
 def touchFile(filepath):
     '''Touch file.'''
@@ -442,11 +433,23 @@ def touchFile(filepath):
     # Touch file.
     open(filepath, "w").close()
 
-def getDefaultLanguage():
-    '''Get default language.'''
-    (lang, _) = locale.getdefaultlocale()
-    return lang
-
+def showVersionTooltip(widget, pkg):
+    '''Show version tooltip.'''
+    newestVersion = getPkgNewestVersion(pkg)
+    currentVersion = getPkgVersion(pkg)
+    if newestVersion == currentVersion:
+        setHelpTooltip(
+            widget,
+            "%s\n%s: %s" % (__("Click Show Detail"), __("Current Version"), currentVersion))
+    else:    
+        setHelpTooltip(
+            widget,
+            "%s\n%s: %s\n%s: %s" % (__("Click Show Detail"), 
+                                    __("Current Version"), 
+                                    currentVersion, 
+                                    __("Upgrade Version"),
+                                    newestVersion))
+    
 def setHelpTooltip(widget, helpText):
     '''Set help tooltip.'''
     widget.connect("enter-notify-event", lambda w, e: showHelpTooltip(w, helpText))
@@ -488,7 +491,30 @@ def treeViewFocusLastToplevelNode(treeview):
     else:
         path = (0)
     treeview.set_cursor(path)
-
+    
+def treeViewScrollVertical(treeview, scrollUp=True):
+    '''Scroll tree view vertical.'''
+    # Init.
+    scrollNum = 9
+    candidateCount = treeViewGetToplevelNodeCount(treeview)
+    cursor = treeview.get_cursor()
+    (path, column) = cursor
+    maxCandidate = candidateCount - 1
+    
+    # Get candidate at cursor.
+    if path == None:
+        currentCandidate = maxCandidate
+    else:
+        (currentCandidate,) = path
+        
+    # Set cursor to new candidate.
+    if scrollUp:
+        newCandidate = max(0, currentCandidate - scrollNum)
+    else:
+        newCandidate = min(currentCandidate + scrollNum, maxCandidate)
+        
+    treeview.set_cursor((newCandidate))
+    
 def treeViewFocusNextToplevelNode(treeview):
     '''Focus next toplevel node.'''
     selectedPath = treeViewGetSelectedPath(treeview)
@@ -507,20 +533,161 @@ def treeViewFocusPrevToplevelNode(treeview):
 def removeFile(path):
     '''Remove file.'''
     if os.path.exists(path):
-        print "Remove ", path
         os.remove(path)
-
-def getUserID():
-    '''Get Mac Address and MD5.'''
-    macAddress = uuid.getnode()
-    return (hashlib.md5(str(macAddress))).hexdigest()
         
+def removeDirectory(path):
+    """equivalent to rm -rf path"""
+    for i in os.listdir(path):
+        fullPath = os.path.join(path, i)
+        if os.path.isdir(fullPath):
+            removeDirectory(fullPath)
+        else:
+            os.remove(fullPath)
+    os.rmdir(path)        
+
+def getLastUpdateHours(filepath):
+    """
+    Return the number of hours since last update.
+    
+    If the date is unknown, return "None"
+    """
+    if not os.path.exists(filepath):
+        return None
+    agoHours = int((time.time() - os.stat(filepath)[stat.ST_MTIME]) / (60 * 60))
+    return agoHours
+
+class AnonymityThread(td.Thread):
+    '''Anonymity thread.'''
+
+    def __init__(self, callback):
+        '''Init anonymity thread.'''
+        td.Thread.__init__(self)
+        self.setDaemon(True) # make thread exit when main program exit
+
+        self.callback = callback
+        
+    def run(self):
+        '''Run.'''
+        self.callback()    
+        
+def addInList(eList, element):
+    '''Add element in list.'''
+    if not element in eList:
+        eList.append(element)
+        
+def removeFromList(eList, element):
+    '''Remove element from list.'''
+    if element in eList:
+        eList.remove(element)
+        
+def sortAlpha(eList):
+    '''Get alpha list.'''
+    return sorted(eList, key=lambda e: e)
+
+def sortMatchKeyword(eList, keyword):
+    '''Sort list by match keyword.'''
+    return sorted(eList, cmp=lambda x, y: cmpMatchKeyword(x, y, keyword))
+
+def cmpMatchKeyword(x, y, keyword):
+    '''Compare match keyword.'''
+    xMatches = x.split(keyword)
+    yMatches = y.split(keyword)
+    xMatchPre, xMatchPost = xMatches[0], ''.join(xMatches[1:])
+    yMatchPre, yMatchPost = yMatches[0], ''.join(yMatches[1:])
+    xMatchTimes = len(xMatches)
+    yMatchTimes = len(yMatches)
+    xLenPre = len(xMatchPre)
+    xLenPost = len(xMatchPost)
+    yLenPre = len(yMatchPre)
+    yLenPost = len(yMatchPost)
+    
+    if xLenPre < yLenPre:
+        return -1
+    elif xLenPre > yLenPre:
+        return 1
+    elif xLenPost < yLenPost:
+        return -1
+    elif xLenPost > yLenPost:
+        return 1
+    elif xMatchTimes > yMatchTimes:
+        return -1
+    elif xMatchTimes < yMatchTimes:
+        return 1
+    elif len(xMatchPost.split(keyword)[0]) < len(yMatchPost.split(keyword)[0]):
+        return -1
+    else:
+        return cmp(xMatchPre + xMatchPost, yMatchPre + yMatchPost)
+
+def todayStr():
+    '''Get string of today.'''
+    structTime = time.localtime()
+    return "%s-%s-%s" % (structTime.tm_year, structTime.tm_mon, structTime.tm_mday)
+
+def aptsearch(keywords):
+    '''Search keywords.'''
+    lines = getCommandOutput(["apt-cache", "search"] + keywords)
+    pkgs = []
+    for line in lines:
+        splitList = line.split()
+        if len(splitList) > 0:
+            pkgs.append(splitList[0])        
+            
+    return pkgs
+
+def getDirSize(dirname):
+    '''Get directory size.'''
+    totalSize = 0
+    for root, dirs, files in os.walk(dirname):
+        for filepath in files:
+            totalSize += os.path.getsize(os.path.join(root, filepath))
+            
+    return totalSize
+
+def getEntryText(entry):
+    '''Get entry text.'''
+    return entry.get_text().split(" ")[0]
+
+def parseProxyString():
+    '''Parse proxy string.'''
+    proxyDict = evalFile("./proxy", True)
+    if proxyDict != None and proxyDict.has_key("address") and "://" in proxyDict["address"]:
+        [addressPre, addressPost] = proxyDict["address"].split("://")
+        if proxyDict.has_key("port"):
+            port = ":" + proxyDict["port"]
+        else:
+            port = ""
+        if proxyDict.has_key("user"):
+            user = proxyDict["user"]
+        else:
+            user = ""
+        if proxyDict.has_key("password"):
+            password = ":" + proxyDict["password"]
+        else:
+            password = ""
+            
+        if user == "" and password == "":
+            proxyString = addressPre + "://" + user + password + addressPost + port
+        else:
+            proxyString = addressPre + "://" + user + password + "@" + addressPost + port
+            
+        return proxyString
+    else:
+        return None
+    
+def killProcess(proc):
+    '''Kill process.'''
+    try:
+        if proc != None:
+            proc.kill()
+    except Exception, e:
+        pass
+
 #  LocalWords:  halfstar AppIcon pkgInfo shortDesc zh TW longDesc downloadSize
 #  LocalWords:  getPkgInstalledSize getPkgDependSize useSize uname libdevel ZB
 #  LocalWords:  oldlibs resize moveWindow addInScrolledWindow scrolledWindow
 #  LocalWords:  shadowType viewport newButtonWithoutPadding getFontYCoordinate
 #  LocalWords:  fontSize xmlrpclib ServerProxy getVersion getAria versionList
-#  LocalWords:  getCommandOutput getCandidates pkgs len preStr matchStr restStr
+#  LocalWords:  getCommandOutputFirstLine pkgs len preStr matchStr restStr
 #  LocalWords:  BBBB setMarkup activeMarkup normalMarkup setCursor eventbox
 #  LocalWords:  setDefaultCursor resetAfterClick setCustomizeClickableCursor
 #  LocalWords:  cursorPath setCustomizeCursor runCommand subprocess touchFile

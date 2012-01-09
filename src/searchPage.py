@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,22 +22,22 @@
 
 from appItem import *
 from draw import *
+from lang import __, getDefaultLanguage
 import appView
 import gtk
 import pango
-import pygtk
 import search
 import searchCompletion as sc
 import searchView
 import utils
-pygtk.require('2.0')
 
-class SearchPage:
+class SearchPage(object):
     '''Search page.'''
 	
     def __init__(self, searchQuery, pageId, repoCache, keyword, pkgList, 
                  switchStatus, downloadQueue, 
-                 entryDetailCallback, sendVoteCallback, fetchVoteCallback, exitSearchPageCallback):
+                 entryDetailCallback, sendVoteCallback, fetchVoteCallback, exitSearchPageCallback,
+                 launchApplicationCallback):
         '''Init for search page.'''
         # Init.
         self.searchQuery = searchQuery
@@ -59,7 +59,8 @@ class SearchPage:
             downloadQueue,
             entryDetailCallback,
             sendVoteCallback,
-            fetchVoteCallback
+            fetchVoteCallback,
+            launchApplicationCallback
             )
         
         self.box.pack_start(self.topbar.eventbox, False, False)
@@ -91,7 +92,7 @@ class SearchPage:
         self.topbar.updateTopbar(candidate, len(self.pkgList))
         self.searchView.updateSearch(len(self.pkgList))
     
-class Topbar:
+class Topbar(object):
     '''Top bar.'''
 	
     SEARCH_ENTRY_WIDTH = 300
@@ -113,38 +114,40 @@ class Topbar:
         drawTopbar(self.eventbox)
         self.eventbox.add(self.boxAlign)
         self.keywordLabel = gtk.Label()
-        self.numLabel = gtk.Label()
         self.updateTopbar(keyword, itemNum)
 
         # Add search entry and label.
         (self.searchEntry, searchAlign, self.searchCompletion) = newSearchUI(
-            "请输入你要搜索的软件名称、版本或其他信息",
-            lambda text: utils.getCandidates(map (lambda appInfo: appInfo.pkg.name, appInfos), text),
+            __("Please enter the name you want to search for software, version or other information"),
+            lambda text: getCandidates(map (lambda appInfo: appInfo.pkg.name, appInfos), text),
             clickCandidateCallback,
             searchCallback)
         
         # Add return button.
         (returnButton, returnButtonAlign) = newActionButton(
-            "search", 1.0, 0.5, "cell", False, "返回", BUTTON_FONT_SIZE_MEDIUM, "#FFFFFF",
+            "search", 1.0, 0.5, "cell", False, __("Return"), BUTTON_FONT_SIZE_MEDIUM, "bigButtonFont",
             0, 10
             )
         returnButton.connect("button-release-event", lambda widget, event: exitSearchPageCallback(pageId))
         
         # Connect widgets.
-        self.box.pack_start(self.keywordLabel, False, False, self.paddingX)
-        self.box.pack_start(self.numLabel, False, False, self.paddingX)
+        self.box.pack_start(self.keywordLabel, False, False)
         self.box.pack_start(searchAlign, True, True, self.paddingX)
         self.box.pack_start(returnButtonAlign, False, False)
         
     def updateTopbar(self, keyword, itemNum):
         '''Set number label.'''
+        
         self.keywordLabel.set_markup(
-            ("<span size='%s'>搜到和 </span>" % (LABEL_FONT_SIZE))
-            + ("<span foreground='#00BBBB' size='%s'><b>%s</b></span>" % (LABEL_FONT_SIZE, keyword)))
-        self.numLabel.set_markup(
-            ("<span size='%s'>相关的软件共</span>" % (LABEL_FONT_SIZE))
-            + "<span foreground='#00BB00' size='%s'>%s</span>" % (LABEL_FONT_SIZE, str(itemNum)) 
-            + ("<span size='%s'>款</span>" % (LABEL_FONT_SIZE)))
+            __("Topbar SearchPage") % (LABEL_FONT_SIZE, 
+                                       appTheme.getDynamicColor("topbarKeyword").getColor(),
+                                       LABEL_FONT_SIZE, 
+                                       keyword.strip(), 
+                                       LABEL_FONT_SIZE, 
+                                       appTheme.getDynamicColor("topbarNum").getColor(),
+                                       LABEL_FONT_SIZE, 
+                                       str(itemNum), 
+                                       LABEL_FONT_SIZE))
     
 
 #  LocalWords:  BBBB

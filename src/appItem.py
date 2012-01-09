@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,17 +22,18 @@
 
 from constant import *
 from draw import *
+from lang import __, getDefaultLanguage
+from searchEntry import *
+from theme import *
 import appView
 import gobject
 import gtk
 import pango
 import progressbar as pb
-import pygtk
 import searchCompletion as sc
 import utils
-pygtk.require('2.0')
 
-class UninstallItem:
+class UninstallItem(object):
     '''Application item.'''
     
     ITEM_PADDING = 5
@@ -79,8 +80,8 @@ class UninstallItem:
         self.itemFrame.set(0.0, 0.5, 1.0, 1.0)
         self.itemFrame.add(self.itemEventBox)
         
-        self.appBasicBox = createItemBasicBox(self.appInfo, 200, self.itemBox, self.entryDetailView)
-        self.itemBox.pack_start(self.appBasicBox, True, True, self.APP_LEFT_PADDING_X)
+        self.appBasicView = AppBasicView(self.appInfo, 200 + APP_BASIC_WIDTH_ADJUST, self.itemBox, self.entryDetailView)
+        self.itemBox.pack_start(self.appBasicView.align, True, True, self.APP_LEFT_PADDING_X)
         
         self.appAdditionBox = gtk.HBox()
         self.appAdditionAlign = gtk.Alignment()
@@ -120,20 +121,26 @@ class UninstallItem:
         # Clean right box first.
         utils.containerRemoveAll(self.appAdditionBox)
         
-        # Add application installed size.
-        size = utils.getPkgInstalledSize(pkg)
-        appSize = gtk.Label()
-        appSize.set_size_request(self.SIZE_LABEL_WIDTH, -1)
-        appSize.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, utils.formatFileSize(size)))
-        appSize.set_alignment(1.0, 0.5)
-        self.appAdditionBox.pack_start(appSize, False, False, self.APP_RIGHT_PADDING_X)
-        
         # Add application vote information.
         self.appVoteView = VoteView(
             self.appInfo, PAGE_UNINSTALL, 
-            self.entryDetailCallback, 
             self.sendVoteCallback)
         self.appAdditionBox.pack_start(self.appVoteView.eventbox, False, False)
+        
+        # Add application installed size.
+        size = utils.getPkgInstalledSize(pkg)
+        
+        appSizeLabel = DynamicSimpleLabel(
+            self.appAdditionBox,
+            utils.formatFileSize(size),
+            appTheme.getDynamicColor("appSize"),
+            LABEL_FONT_SIZE,
+            )
+        appSize = appSizeLabel.getLabel()
+        
+        appSize.set_size_request(self.SIZE_LABEL_WIDTH, -1)
+        appSize.set_alignment(1.0, 0.5)
+        self.appAdditionBox.pack_start(appSize, False, False, self.APP_RIGHT_PADDING_X)
         
         # Add action button.
         (actionButtonBox, actionButtonAlign) = createActionButton()
@@ -141,7 +148,11 @@ class UninstallItem:
         
         if self.confirmUninstall:
             appUninstallLabel = gtk.Label()
-            appUninstallLabel.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, "你确定要卸载吗？"))
+            appUninstallLabel.set_markup(
+                "<span foreground='%s' size='%s'>%s</span>" % (
+                    appTheme.getDynamicColor("uninstallConfirm").getColor(),
+                    LABEL_FONT_SIZE, 
+                    __("Are you sure uninstall?")))
             actionButtonBox.pack_start(appUninstallLabel, False, False)
             
             appUninstallBox = gtk.HBox()
@@ -151,15 +162,20 @@ class UninstallItem:
             appUninstallAlign.add(appUninstallBox)
             actionButtonBox.pack_start(appUninstallAlign, False, False)
             
+            if getDefaultLanguage() == "default":
+                buttonName = "uninstall_confirm"
+            else:
+                buttonName = "uninstall_confirm_cn"
+                
             (appConfirmButton, appConfirmAlign) = newActionButton(
-                "uninstall_confirm", 0.0, 0.5, 
-                "cell", False, "卸载", BUTTON_FONT_SIZE_SMALL
+                buttonName, 0.0, 0.5, 
+                "cell", False, __("Action Uninstall"), BUTTON_FONT_SIZE_SMALL, "buttonFont"
                 )
             appConfirmButton.connect("button-release-event", lambda widget, event: self.switchToUninstalling())
             
             (appCancelButton, appCancelAlign) = newActionButton(
-                "uninstall_confirm", 1.0, 0.5, 
-                "cell", False, "取消", BUTTON_FONT_SIZE_SMALL
+                buttonName, 1.0, 0.5, 
+                "cell", False, __("Action Cancel"), BUTTON_FONT_SIZE_SMALL, "buttonFont"
                 )
             appCancelButton.connect("button-release-event", lambda widget, event: self.switchToNormal(False))
             
@@ -168,7 +184,7 @@ class UninstallItem:
         else:
             (appUninstallBox, appUninstallAlign) = newActionButton(
                 "uninstall", 0.5, 0.5,
-                "cell", False, "卸载", BUTTON_FONT_SIZE_SMALL
+                "cell", False, __("Action Uninstall"), BUTTON_FONT_SIZE_SMALL, "buttonFont"
                 )
             appUninstallBox.connect("button-release-event", lambda widget, event: self.switchToNormal(True))
             actionButtonBox.pack_start(appUninstallAlign)
@@ -201,14 +217,15 @@ class UninstallItem:
         if self.appInfo.status == APP_STATE_UNINSTALLING:
             if self.uninstallingProgressbar != None and self.uninstallingFeedbackLabel != None:
                 self.uninstallingProgressbar.setProgress(progress)
-                self.uninstallingFeedbackLabel.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, "卸载中"))
+                self.uninstallingFeedbackLabel.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, __("Action Uninstalling")))
                 
                 self.itemFrame.show_all()
                 
-    def updateVoteView(self, starLevel, voteNum):
+    def updateVoteView(self, starLevel, commentNum):
         '''Update vote view.'''
         if not self.appInfo.status == APP_STATE_UNINSTALLING and self.appVoteView != None:
-            self.appVoteView.updateVote(starLevel, voteNum)
+            self.appVoteView.updateVote(starLevel, commentNum)
+            self.appBasicView.updateCommentNum(commentNum)
                 
 def createActionButton(alignX=0.5, alignY=0.5):
     '''Create action button.'''
@@ -221,7 +238,7 @@ def createActionButton(alignX=0.5, alignY=0.5):
     
     return (appButtonBox, appButtonAlign)
                 
-class DownloadItem:
+class DownloadItem(object):
     '''Application item.'''
     PROGRESS_WIDTH = 170
     APP_RIGHT_PADDING_X = 20
@@ -285,7 +302,10 @@ class DownloadItem:
         self.downloadingFeedbackLabel = feedbackLabel
         actionBox.pack_start(feedbackLabel)
         
-    def initDownloadPauseStatus(self, appAdditionBox, withoutBorder=False):
+    def initDownloadPauseStatus(self, appAdditionBox, withoutBorder=False, color=None):
+        if (color == None):
+            color = appTheme.getDynamicColor("statusUpdate").getColor()
+        
         '''Init download pause status.'''
         # Clean right box first.
         utils.containerRemoveAll(appAdditionBox)
@@ -324,7 +344,7 @@ class DownloadItem:
         
         # Add pause label.
         pauseLabel = gtk.Label()
-        pauseLabel.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, "暂停"))
+        pauseLabel.set_markup("<span foreground='%s' size='%s'>%s</span>" % (color, LABEL_FONT_SIZE, __("Action Pause")))
         pauseLabel.set_width_chars(self.PROGRESS_LABEL_WIDTH_CHARS)
         pauseLabel.set_ellipsize(pango.ELLIPSIZE_END)
         pauseLabel.set_alignment(0.5, 0.5)
@@ -355,27 +375,30 @@ class DownloadItem:
     def switchToDownloading(self):
         '''Switch to downloading.'''
         pkgName = utils.getPkgName(self.appInfo.pkg)
-        self.switchStatus(pkgName, APP_STATE_DOWNLOADING)
         self.downloadQueue.addDownload(pkgName)
+        self.switchStatus(pkgName, APP_STATE_DOWNLOADING)
         
     def switchToDownloadPause(self):
         '''Switch to pause.'''
         pkgName = utils.getPkgName(self.appInfo.pkg)
-        self.switchStatus(pkgName, APP_STATE_DOWNLOAD_PAUSE)
         self.downloadQueue.stopDownload(pkgName)
+        self.switchStatus(pkgName, APP_STATE_DOWNLOAD_PAUSE)
         
     def switchToNormal(self):
         '''Switch to normal.'''
         pkgName = utils.getPkgName(self.appInfo.pkg)
+        self.downloadQueue.stopDownload(pkgName)
         if self.appInfo.pkg.is_upgradable:
             self.switchStatus(pkgName, APP_STATE_UPGRADE)
         else:
             self.switchStatus(pkgName, APP_STATE_NORMAL)
-        self.downloadQueue.stopDownload(pkgName)
 
-    def updateDownloadingStatus(self, progress, feedback, color="#000000"):
+    def updateDownloadingStatus(self, progress, feedback, color=None):
         '''Update downloading status.'''
         if self.appInfo.status == APP_STATE_DOWNLOADING:
+            if (color == None):
+                color = appTheme.getDynamicColor("statusUpdate").getColor()
+        
             if self.downloadingProgressbar != None and self.downloadingFeedbackLabel != None:
                 self.downloadingProgressbar.setProgress(progress)
                 self.downloadingFeedbackLabel.set_markup(
@@ -384,111 +407,132 @@ class DownloadItem:
                 
                 self.itemFrame.show_all()
                 
-    def updateInstallingStatus(self, progress, feedback, color="#000000"):
+    def updateInstallingStatus(self, progress, feedback, color=None):
         '''Update installing status.'''
         if self.appInfo.status == APP_STATE_INSTALLING:
+            if (color == None):
+                color = appTheme.getDynamicColor("statusUpdate").getColor()
+        
             if self.installingProgressbar != None and self.installingFeedbackLabel != None:
                 self.installingProgressbar.setProgress(progress)
                 self.installingFeedbackLabel.set_markup(
                     "<span foreground='%s' size='%s'>%s</span>"
-                    % (color, LABEL_FONT_SIZE, "安装中"))
+                    % (color, LABEL_FONT_SIZE, __("Action Installing")))
                 
                 self.itemFrame.show_all()
                 
-    def updateUpgradingStatus(self, progress, feedback, color="#000000"):
+    def updateUpgradingStatus(self, progress, feedback, color=None):
         '''Update upgrading status.'''
         if self.appInfo.status == APP_STATE_UPGRADING:
+            if (color == None):
+                color = appTheme.getDynamicColor("statusUpdate").getColor()
+        
             if self.upgradingProgressbar != None and self.upgradingFeedbackLabel != None:
                 self.upgradingProgressbar.setProgress(progress)
                 self.upgradingFeedbackLabel.set_markup(
                     "<span foreground='%s' size='%s'>%s</span>"
-                    % (color, LABEL_FONT_SIZE, "升级中"))
+                    % (color, LABEL_FONT_SIZE, __("Action Updating")))
                 
                 self.itemFrame.show_all()
                 
-def createItemBasicBox(appInfo, maxWidth, parent, entryDetailCallback, showVersion=True):
-    '''Create item information.'''
-    # Init.
-    appBasicAlign = gtk.Alignment()
-    appBasicAlign.set(0.0, 0.5, 1.0, 1.0)
-    
-    appBasicBox = gtk.HBox()
-    appBasicAlign.add(appBasicBox)
-    pkg = appInfo.pkg
-    
-    # Add application icon.
-    appIcon = createAppIcon(pkg)
-    appBasicBox.pack_start(appIcon, False, False)
-    
-    # Add application left box.
-    appBox = gtk.VBox()
-    appAlign = gtk.Alignment()
-    appAlign.set(0.0, 0.5, 0.0, 0.0)
-    appAlign.add(appBox)
-    appBasicBox.pack_start(appAlign)
-    
-    # Add application name.
-    pkgName = utils.getPkgName(pkg)
-    appName = gtk.Label()
-    parent.connect("size-allocate", 
-                   lambda w, e: adjustLabelWidth(parent, 
-                                                 appName,
-                                                 LABEL_FONT_SIZE / 1000,
-                                                 maxWidth))
-    
-    appName.set_single_line_mode(True)
-    appName.set_ellipsize(pango.ELLIPSIZE_END)
-    appName.set_alignment(0.0, 0.5)
-    appNameEventBox = gtk.EventBox()
-    appNameEventBox.add(appName)
-    appNameEventBox.set_visible_window(False)
-    appNameEventBox.connect(
-        "button-press-event",
-        lambda w, e: entryDetailCallback())
-    appBox.pack_start(appNameEventBox, False, False)
-    
-    utils.setHelpTooltip(appNameEventBox, "点击查看详细信息")
-    
-    pkgVersion = utils.getPkgVersion(pkg)
-    nameMarkup = "<span foreground='#1A3E88' size='%s'>%s</span>" % (LABEL_FONT_SIZE, pkgName)
-    nameActiveMarkup = "<span foreground='#0084FF' size='%s'>%s</span>" % (LABEL_FONT_SIZE, pkgName)
-    versionMarkup = "<span foreground='#7d8087' size='%s'> (%s)</span>" % (LABEL_FONT_SIZE, pkgVersion)
-    versionActiveMarkup = "<span foreground='#555555' size='%s'> (%s)</span>" % (LABEL_FONT_SIZE, pkgVersion)
-    if showVersion:
-        appName.set_markup(nameMarkup + versionMarkup)
-        utils.setClickableLabel(
-            appNameEventBox,
-            appName,
-            nameMarkup + versionMarkup,
-            nameActiveMarkup + versionActiveMarkup,
+class AppBasicView(object):
+    '''Application basic view.'''
+	
+    def __init__(self, appInfo, maxWidth, parent, entryDetailCallback):
+        '''Init application basic view.'''
+        # Init.
+        self.align = gtk.Alignment()
+        self.align.set(0.0, 0.5, 1.0, 1.0)
+        self.commentNum = 0
+        
+        appBasicBox = gtk.HBox()
+        self.align.add(appBasicBox)
+        pkg = appInfo.pkg
+        
+        # Add application icon.
+        appIcon = createAppIcon(pkg)
+        appBasicBox.pack_start(appIcon, False, False)
+        
+        # Add application left box.
+        appBox = gtk.VBox()
+        appAlign = gtk.Alignment()
+        appAlign.set(0.0, 0.5, 0.0, 0.0)
+        appAlign.add(appBox)
+        appBasicBox.pack_start(appAlign)
+        
+        # Add application name.
+        pkgName = utils.getPkgName(pkg)
+        
+        appNameLabel = DynamicLabel(
+            parent,
+            pkgName,
+            appTheme.getDynamicLabelColor("appName"), 
+            LABEL_FONT_SIZE,
             )
-    else:
-        appName.set_markup(nameMarkup)
-        utils.setClickableLabel(
+        appName = appNameLabel.getLabel()
+        
+        appName.set_single_line_mode(True)
+        appName.set_alignment(0.0, 0.0)
+        
+        self.appNameBox = gtk.HBox()
+        self.appNameBox.pack_start(appName, False, False)
+        
+        self.appCommentNumBox = gtk.VBox()
+        self.appNameBox.pack_start(self.appCommentNumBox, True, True)
+        
+        appNameEventBox = gtk.EventBox()
+        appNameEventBox.add(self.appNameBox)
+        appNameEventBox.set_visible_window(False)
+        appNameEventBox.connect(
+            "button-press-event",
+            lambda w, e: entryDetailCallback())
+        appBox.pack_start(appNameEventBox, False, False)
+        
+        utils.showVersionTooltip(appNameEventBox, pkg)
+        
+        setClickableDynamicLabel(
             appNameEventBox,
-            appName,
-            nameMarkup,
-            nameActiveMarkup,
+            appNameLabel,
             )
-    
-    # Add application summary.
-    summary = utils.getPkgShortDesc(pkg)
-    appSummaryBox = gtk.HBox()
-    appSummary = gtk.Label()
-    appSummary.set_markup("<span foreground='#000000' size='%s'>%s</span>" % (LABEL_FONT_SIZE, summary))
-    parent.connect("size-allocate", 
-                   lambda w, e: adjustLabelWidth(parent, 
-                                                 appSummary,
-                                                 LABEL_FONT_SIZE / 1000,
-                                                 maxWidth))
-    
-    appSummary.set_single_line_mode(True)
-    appSummary.set_ellipsize(pango.ELLIPSIZE_END)
-    appSummary.set_alignment(0.0, 0.5)
-    appSummaryBox.pack_start(appSummary, False, False)
-    appBox.pack_start(appSummaryBox, False, False)
-    
-    return appBasicAlign
+        
+        # Add application summary.
+        summary = utils.getPkgShortDesc(pkg)
+        appSummaryBox = gtk.HBox()
+        appSummaryLabel = DynamicSimpleLabel(
+            parent,
+            summary,
+            appTheme.getDynamicColor("appSummary"),
+            LABEL_FONT_SIZE
+            )
+        appSummary = appSummaryLabel.getLabel()
+        parent.connect("size-allocate", 
+                       lambda w, e: adjustLabelWidth(parent, 
+                                                     appSummary,
+                                                     LABEL_FONT_SIZE / 1000,
+                                                     maxWidth))
+        
+        appSummary.set_single_line_mode(True)
+        appSummary.set_ellipsize(pango.ELLIPSIZE_END)
+        appSummary.set_alignment(0.0, 0.5)
+        appSummaryBox.pack_start(appSummary, False, False)
+        appBox.pack_start(appSummaryBox, False, False)
+        
+    def updateCommentNum(self, commentNum):
+        '''Update comment num.'''
+        if commentNum > 0:
+            utils.containerRemoveAll(self.appCommentNumBox)
+            appCommentLabel = DynamicSimpleLabel(
+                self.appCommentNumBox,
+                __("Comment") % commentNum,
+                appTheme.getDynamicColor("appComment"),
+                LABEL_FONT_SIZE,
+                ).getLabel()
+            appCommentLabel.set_single_line_mode(True)
+            appCommentLabel.set_alignment(0.0, 1.0)
+            
+            self.appCommentNumBox.pack_start(appCommentLabel, True, True)
+            
+            self.align.show_all()
 
 def adjustLabelWidth(parent, label, fontWidth, adjustWidth):
     '''Adjust label width.'''
@@ -505,7 +549,7 @@ def createAppIcon(pkg, size=32, alignLeft=5, alignRight=5, alignTop=5, alignBott
     
     return appIconAlign
 
-class VoteView:
+class VoteView(object):
     '''Vote view.'''
     
     VOTE_PADDING_X = 16
@@ -515,18 +559,15 @@ class VoteView:
     FOCUS_NORMAL = 1
     FOCUS_INIT = 2
 	
-    def __init__(self, appInfo, pageId,
-                 entryDetailCallback, sendVoteCallback):
+    def __init__(self, appInfo, pageId, sendVoteCallback):
         '''Init for vote view.'''
         self.appInfo = appInfo
         self.pageId = pageId
         self.starLevel = 0
         self.voteNum   = 0
         self.sendVoteCallback = sendVoteCallback
-        self.entryDetailCallback = entryDetailCallback
         
         self.focusStatus = self.FOCUS_INIT
-        # self.focusStatus = self.FOCUS_NORMAL
         self.starSize = 16
         self.starView = None
         
@@ -541,9 +582,6 @@ class VoteView:
         
         self.starBox = gtk.HBox()
         self.box.pack_start(self.starBox, False, False, self.VOTE_PADDING_Y)
-        
-        self.voteBox = gtk.HBox()
-        self.box.pack_start(self.voteBox)
         
         self.init()
         
@@ -578,7 +616,6 @@ class VoteView:
         '''Draw focus star status.'''
         # Remove child first.
         utils.containerRemoveAll(self.starBox)
-        utils.containerRemoveAll(self.voteBox)
         
         # Add application vote star.
         self.starView = StarView()
@@ -587,69 +624,32 @@ class VoteView:
         self.starView.eventbox.connect("button-press-event", lambda w, e: self.switchFocusStatus(self.FOCUS_NORMAL))
         
         # Show help.
-        utils.setHelpTooltip(self.starView.eventbox, "点击评分")
+        utils.setHelpTooltip(self.starView.eventbox, __("Click Finish Vote"))
+        setClickableCursor(self.starView.eventbox)
         
     def drawFocusNormal(self):
         '''Draw focus normal status.'''
         # Remove child first.
         utils.containerRemoveAll(self.starBox)
-        utils.containerRemoveAll(self.voteBox)
+        # utils.containerRemoveAll(self.voteBox)
         
         # Add application vote star.
         starBox = createStarBox(self.starLevel, self.starSize)
-        
         self.starBox.pack_start(starBox)
         
-        self.voteLabel = gtk.Label()
-        self.voteLabel.set_markup("<span foreground='#1A3E88' size='%s'>评分</span>" % (LABEL_FONT_SIZE))
-        self.voteEventBox = gtk.EventBox()
-        self.voteEventBox.set_visible_window(False)
-        self.voteEventBox.add(self.voteLabel)
-        self.voteEventBox.connect("button-press-event", lambda w, e: self.switchFocusStatus(self.FOCUS_STAR))
-        self.voteBox.pack_start(self.voteEventBox)
-        utils.setClickableLabel(
-            self.voteEventBox,
-            self.voteLabel,
-            "<span foreground='#1A3E88' size='%s'>评分</span>" % (LABEL_FONT_SIZE),
-            "<span foreground='#0084FF' size='%s'>评分</span>" % (LABEL_FONT_SIZE))
+        starBox.connect("button-press-event", lambda w, e: self.switchFocusStatus(self.FOCUS_STAR))
         
-        self.rate = gtk.Label()
-        self.rateEventBox = gtk.EventBox()
-        self.rateEventBox.set_visible_window(False)
-        self.rateEventBox.add(self.rate)
-        self.rateEventBox.connect("button-press-event", 
-                             lambda w, e: self.entryDetailCallback(self.pageId, self.appInfo))
-        rateAlign = gtk.Alignment()
-        rateAlign.set(1.0, 0.5, 0.0, 0.0)
-        rateAlign.add(self.rateEventBox)
-        self.voteBox.pack_start(rateAlign)
+        utils.setHelpTooltip(starBox, __("Click Start Vote"))
+        setClickableCursor(starBox)
         
-        if self.voteNum == 0:
-            self.rate.set_markup("<span foreground='#1A3E88' size='%s'>抢沙发!</span>" % (LABEL_FONT_SIZE))
-            
-            utils.setClickableLabel(
-                self.rateEventBox,
-                self.rate,
-                "<span foreground='#1A3E88' size='%s'>抢沙发!</span>" % (LABEL_FONT_SIZE),
-                "<span foreground='#0084FF' size='%s'>抢沙发!</span>" % (LABEL_FONT_SIZE))
-        else:
-            self.rate.set_markup("<span foreground='#1A3E88' size='%s'>%s 评论</span>" % (LABEL_FONT_SIZE, self.voteNum))
-            
-            utils.setClickableLabel(
-                self.rateEventBox,
-                self.rate,
-                "<span foreground='#1A3E88' size='%s'>%s 评论</span>" % (LABEL_FONT_SIZE, self.voteNum),
-                "<span foreground='#0084FF' size='%s'>%s 评论</span>" % (LABEL_FONT_SIZE, self.voteNum))
-
     def drawFocusInit(self):
         '''Draw focus out.'''
         # Remove child first.
         utils.containerRemoveAll(self.starBox)
-        utils.containerRemoveAll(self.voteBox)
         
         # Add waiting label.
         waitingVoteLabel = gtk.Label()
-        waitingVoteLabel.set_markup("<span foreground='#1A3E88' size='%s'>读取评论数据...</span>" % (LABEL_FONT_SIZE))
+        waitingVoteLabel.set_markup("")
         self.starBox.pack_start(waitingVoteLabel)
         
     def updateVote(self, starLevel, voteNum):
@@ -660,20 +660,21 @@ class VoteView:
         if not self.focusStatus == self.FOCUS_STAR:
             self.switchFocusStatus(self.FOCUS_NORMAL)
         
-class StarView:
+class StarView(object):
     '''Star view.'''
 	
-    def __init__(self):
+    def __init__(self, starLevel=10, starSize=16, drag=True):
         '''Init for star view.'''
-        self.starLevel = 10
-        self.starSize = 16
+        self.starLevel = starLevel
+        self.starSize = starSize
         
         self.eventbox = gtk.EventBox()
         self.eventbox.add_events(gtk.gdk.POINTER_MOTION_MASK)
         self.eventbox.add_events(gtk.gdk.POINTER_MOTION_HINT_MASK)
         self.eventbox.set_visible_window(False)
         self.eventbox.set_size_request(self.starSize * 5, self.starSize)
-        self.eventbox.connect("motion-notify-event", self.updateStarLevel)
+        if drag:
+            self.eventbox.connect("motion-notify-event", self.updateStarLevel)
         self.eventbox.connect("expose-event", self.draw)
         
         self.eventbox.show_all()
@@ -683,7 +684,8 @@ class StarView:
         cr = widget.window.cairo_create()
         for i in range(0, 5):
             starPath = getStarPath(i + 1, self.starLevel)
-            starPixbuf = gtk.gdk.pixbuf_new_from_file_at_size(starPath, self.starSize, self.starSize)
+            starPixbuf = appTheme.getDynamicPixbuf(starPath).getPixbuf().scale_simple(
+                self.starSize, self.starSize, gtk.gdk.INTERP_BILINEAR)
             drawPixbuf(cr, starPixbuf, 
                        widget.allocation.x + i * self.starSize,
                        widget.allocation.y)
@@ -709,12 +711,28 @@ def createStarBox(starLevel=5.0, starSize=16, paddingX=0):
     '''Create star box.'''
     starLevel = int(round(starLevel)) # round star level
     
-    appStarBox = gtk.HBox()
+    eventbox = gtk.EventBox()
+    eventbox.set_size_request(starSize * 5, starSize)
+    eventbox.set_visible_window(False)
+    eventbox.connect("expose-event", lambda w, e: drawStar(w, e, starLevel, starSize, paddingX))
+    
+    return eventbox
+
+def drawStar(widget, event, starLevel, starSize, paddingX):
+    '''Draw star.'''
+    cr = widget.window.cairo_create()
     for i in range(0, 5):
-        starIcon = utils.getStarImg(i + 1, starLevel, starSize)
-        appStarBox.pack_start(starIcon, False, False, paddingX)
+        starPath = utils.getStarPath(i + 1, starLevel)
+        starPixbuf = appTheme.getDynamicPixbuf(starPath).getPixbuf().scale_simple(
+            starSize, starSize, gtk.gdk.INTERP_BILINEAR)
+        drawPixbuf(cr, starPixbuf, 
+                   widget.allocation.x + i * starSize,
+                   widget.allocation.y)
         
-    return appStarBox
+    if widget.get_child() != None:
+        widget.propagate_expose(widget.get_child(), event)
+    
+    return True
 
 def initActionStatus(appAdditionBox, progress, feedback, withoutBorder=False):
     '''Init action status.'''
@@ -760,35 +778,6 @@ def newActionButton(iconPrefix, alignX, alignY,
     
     return (button, align)
 
-class SearchEntry(gtk.Entry):
-    '''Search entry.'''
-	
-    def __init__(self, helpString):
-        '''Init for search entry.'''
-        # Init.
-        gtk.Entry.__init__(self)
-        
-        # Show help string.
-        self.set_text(helpString)
-        
-        # Clean input when first time focus in entry.
-        self.focusInHandler = self.connect("focus-in-event", lambda w, e: self.firstFocusIn())
-        
-    def firstFocusIn(self):
-        '''First touch callback.'''
-        # Empty entry when first time focus in.
-        self.set_text("")
-        
-        # Adjust input text color.
-        self.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse("#000000"))
-        
-        # And disconnect signal itself.
-        self.disconnect(self.focusInHandler)
-        
-        return False
-    
-gobject.type_register(SearchEntry)
-
 def newSearchUI(helpString, getCandidatesCallback, clickCandidateCallback, searchCallback):
     '''New search box.'''
     entryPaddingX = 5
@@ -799,25 +788,29 @@ def newSearchUI(helpString, getCandidatesCallback, clickCandidateCallback, searc
     searchAlign.set(1.0, 0.0, 0.0, 1.0)
     searchAlign.add(searchBox)
     
-    # searchEntry = gtk.Entry()
-    searchEntry = SearchEntry(helpString)
-    searchEntry.modify_text(gtk.STATE_NORMAL, gtk.gdk.color_parse("#999999"))
+    searchEntry = SearchEntry(
+        searchBox, 
+        helpString, 
+        appTheme.getDynamicColor("entryHint"),
+        appTheme.getDynamicColor("entryBackground"),
+        appTheme.getDynamicColor("entryForeground"),
+        )
     searchEntry.set_size_request(SEARCH_ENTRY_WIDTH, -1)
     searchEntry.connect("activate", searchCallback)
+    searchEntry.connect("icon-press", lambda entry, icon, event: searchCallback(entry))
     searchBox.pack_start(searchEntry, False, False, entryPaddingX)
+    
+    searchEntry.set_icon_from_pixbuf(
+        gtk.ENTRY_ICON_SECONDARY, 
+        appTheme.getDynamicPixbuf("topbar/search.png").getPixbuf()
+        )
 
     searchCompletion = sc.SearchCompletion(
         searchEntry,
         getCandidatesCallback,
+        searchCallback,
         clickCandidateCallback,
         )
-    
-    (searchButton, searchButtonAlign) = newActionButton(
-        "search", 0.0, 0.5,
-        "cell", False, "搜索", BUTTON_FONT_SIZE_MEDIUM, "#FFFFFF"
-        )
-    searchButton.connect("button-release-event", lambda w, e: searchCallback(searchEntry))
-    searchBox.pack_start(searchButtonAlign)
     
     return (searchEntry, searchAlign, searchCompletion)
     

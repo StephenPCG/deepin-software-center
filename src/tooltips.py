@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,10 +22,11 @@
 
 from constant import *
 from draw import *
+from lang import __, getDefaultLanguage
 import glib
 import gtk
 
-class Tooltips:
+class Tooltips(object):
     '''Tooltips.'''
     
     def __init__(self, window, widget):
@@ -72,7 +73,10 @@ class Tooltips:
             glib.timeout_add(self.interval, self.redraw)
             
         self.ticker = 0
-        self.label.set_markup("<span foreground='#333333' size='%s'>%s</span>" % (LABEL_FONT_MEDIUM_SIZE, message))
+        self.label.set_markup("<span foreground='%s' size='%s'>%s</span>" % (
+                appTheme.getDynamicColor("tooltipForeground").getColor(),
+                LABEL_FONT_MEDIUM_SIZE, 
+                message))
         
     def redraw(self):
         '''Redraw.'''
@@ -94,7 +98,7 @@ class Tooltips:
         # Draw background.
         rect = widget.allocation
         cr = widget.window.cairo_create()
-        cr.set_source_rgb(*colorHexToCairo("#b8d2ff"))
+        cr.set_source_rgb(*colorHexToCairo(appTheme.getDynamicColor("tooltipBackground").getColor()))
         cr.rectangle(0, 0, rect.width, rect.height)
         cr.fill()
         

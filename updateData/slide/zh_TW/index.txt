@@ -1,0 +1,2 @@
+[("chromium-browser", "穀歌瀏覽器"), ("audacious", "Audacious 播放器"), ("gweled", "寶石迷陣")]
+

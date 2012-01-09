@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,21 +21,21 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from constant import *
+from lang import __, getDefaultLanguage
+from utils import *
 import apt_pkg
 import categorybar
 import gtk
-import pygtk
 import sortedDict
-import subCategorybar
 import utils
-pygtk.require('2.0')
 
-class AppInfo:
+class AppInfo(object):
     '''Application information.'''
     def __init__(self, pkg):
         '''Init for application information.'''
         # Init.
         self.pkg = pkg
+        self.execPath = getPkgExecPath(self.pkg)
         
         if pkg.is_upgradable:
             self.status = APP_STATE_UPGRADE
@@ -48,18 +48,18 @@ class AppInfo:
         
     def initStatus(self):
         '''Init status.'''
-        self.downloadingFeedback = '等待下载'
+        self.downloadingFeedback = __("Action Wait Download")
         self.downloadingProgress = 0
         
         self.downloadPauseFeedback = ''
         
-        self.installingFeedback = '等待安装'
+        self.installingFeedback = __("Action Wait Install")
         self.installingProgress = 0
         
-        self.upgradingFeedback = '等待升级'
+        self.upgradingFeedback = __("Action Wait Update")
         self.upgradingProgress = 0
         
-        self.uninstallingFeedback = '等待卸载'
+        self.uninstallingFeedback = __("Action Wait Uninstall")
         self.uninstallingProgress = 0
         
     def switchStatus(self, appStatus):
@@ -70,18 +70,18 @@ class AppInfo:
             self.initStatus()
         elif appStatus == APP_STATE_DOWNLOADING:
             self.downloadingProgress = 0
-            self.downloadingFeedback = "等待下载"
+            self.downloadingFeedback = __("Action Wait Download")
         elif appStatus == APP_STATE_DOWNLOAD_PAUSE:
-            self.downloadPauseFeedback = "暂停"
+            self.downloadPauseFeedback = __("Pause")
         elif appStatus == APP_STATE_INSTALLING:
             self.installingProgress = 0
-            self.installingFeedback = "等待安装"
+            self.installingFeedback = __("Action Wait Download")
         elif appStatus == APP_STATE_UPGRADING:
             self.upgradingProgress = 0
-            self.upgradingFeedback = "等待升级"
+            self.upgradingFeedback = __("Action Wait Update")
         elif appStatus == APP_STATE_UNINSTALLING:
             self.uninstallingProgress = 0
-            self.uninstallingFeedback = "等待卸载"
+            self.uninstallingFeedback = __("Action Wait Uninstall")
         
     def updateDownloadStatus(self, progress, feedback, status):
         '''Update download status'''
@@ -107,31 +107,73 @@ class AppInfo:
         self.uninstallingProgress = progress
         self.uninstallingFeedback = feedback
 
-class RepoCache:
+class RepoCache(object):
     '''Repository cache.'''
 
-    def __init__(self, cache):
+    # @printExecTime
+    def __init__(self, cache, updateDataDir):
         '''Init for repository cache.'''
         # Init.
         self.cache = {}
+        self.updateDataDir = updateDataDir
         self.upgradablePkgs = []
+        ignorePkgs = evalFile("./ignorePkgs", True)
+        if ignorePkgs == None:
+            self.ignorePkgs = []
+        else:
+            self.ignorePkgs = ignorePkgs
         self.uninstallablePkgs = []
         self.categoryDict = sortedDict.SortedDict(CLASSIFY_LIST)
 
         # Scan category dict.
         whiteList = []
+        sortRecommendDir = self.updateDataDir + "pkgClassify/sortByDefault/%s/" % (getDefaultLanguage())
+        sortDownloadDir =  self.updateDataDir + "pkgClassify/sortByDownload/"
+        sortVoteDir =  self.updateDataDir + "pkgClassify/sortByVote/"
+        
         for (categoryType, categoryFile) in CLASSIFY_FILES:
-            for line in open("./pkgClassify/" + categoryFile).readlines():
+            sortRecommendList = []
+            sortDownloadList = []
+            sortVoteList = []
+            
+            # Scan default sort list.
+            for line in open(sortRecommendDir + categoryFile).readlines():
                 pkgName = line.rstrip("\n")
                 if cache.has_key(pkgName) and cache[pkgName].candidate != None:
-                    # Add in category dict.
-                    (_, categoryList) = self.categoryDict[categoryType]
-                    categoryList.append(pkgName)
+                    # Append in default sort list.
+                    sortRecommendList.append(pkgName)
                     
                     # Add in white list.
                     whiteList.append(pkgName)
                 else:
-                    print "Haven't found package %s in cache." % (pkgName)
+                    print pkgName
+                    # print "Haven't found package '%s' in current system (%s). Make sure you use Linux Deepin or add deepin sourcelist." % (pkgName, sortRecommendDir + categoryFile)
+                    
+            # Scan download sort list.
+            for line in open(sortDownloadDir + categoryFile).readlines():
+                pkgName = line.rstrip("\n")
+                if cache.has_key(pkgName) and cache[pkgName].candidate != None:
+                    # Append in download sort list.
+                    sortDownloadList.append(pkgName)
+                else:
+                    print pkgName
+                    # print "Haven't found package '%s' in current system (%s). Make sure you use Linux Deepin or add deepin sourcelist." % (pkgName, sortDownloadDir + categoryFile)
+                    
+            # Scan vote sort list.
+            for line in open(sortVoteDir + categoryFile).readlines():
+                pkgName = line.rstrip("\n")
+                if cache.has_key(pkgName) and cache[pkgName].candidate != None:
+                    # Append in vote sort list.
+                    sortVoteList.append(pkgName)
+                else:
+                    print pkgName
+                    # print "Haven't found package '%s' in current system (%s). Make sure you use Linux Deepin or add deepin sourcelist." % (pkgName, sortVoteDir + categoryFile)
+                    
+            # Add sort list in category dict.
+            (classifyIcon, _) = self.categoryDict[categoryType]
+            self.categoryDict[categoryType] = (classifyIcon, (sortRecommendList, sortDownloadList, sortVoteList))
+            
+        # Build white list dict.
         self.whiteListDict = dict.fromkeys(whiteList)
 
         # Scan all packages to store and rank. 
@@ -143,7 +185,7 @@ class RepoCache:
                 self.cache[pkg.name] = AppInfo(pkg)
                 
                 # Add upgradable packages.
-                if pkg.is_upgradable:
+                if pkg.is_upgradable and pkg.name not in self.ignorePkgs:
                     self.upgradablePkgs.append(pkg.name)
                     
                 # Add uninstall packages.
@@ -151,9 +193,31 @@ class RepoCache:
                 if self.isPkgUninstallable(pkg):
                     self.uninstallablePkgs.append(pkg.name)
                     
-    def getAppList(self, category, startIndex, endIndex):
+        # Resort.
+        self.upgradablePkgs = self.sortPackages(self.upgradablePkgs)
+        self.ignorePkgs = self.sortPackages(self.ignorePkgs)
+        
+        # Find package in white list haven't execute path, just for develop usage.
+        # self.testExecPath(whiteList)
+
+    def testExecPath(self, whiteList):
+        '''Find package in white list haven't execute path.'''
+        for pkgName in whiteList:
+            if self.cache[pkgName].execPath == None:
+                print pkgName
+        
+    def getAppList(self, category, sortType, startIndex, endIndex):
         '''Get application list in given range.'''
-        (_, pkgNames) = self.categoryDict[category]
+        (_, (sortRecommendList, sortDownloadList, sortVoteList)) = self.categoryDict[category]
+        if sortType == "sortRecommend":
+            pkgNames = sortRecommendList
+        elif sortType == "sortDownload":
+            pkgNames = sortDownloadList
+        elif sortType == "sortVote":
+            pkgNames = sortVoteList
+        else:
+            print "Unknown sorte type: %s" % (sortType)
+            
         appList = []
         for index in range(startIndex, endIndex):
             pkgName = pkgNames[index]
@@ -162,19 +226,40 @@ class RepoCache:
     
     def getCategoryNumber(self, category):
         '''Get sub category number.'''
-        (_, categoryList) = self.categoryDict[category]
+        (_, (categoryList, _, _)) = self.categoryDict[category]
         return len(categoryList)
     
     def getCategorys(self):
         '''Get category list.'''
         return map (lambda (categoryName, (categoryIcon, _)): (categoryName, categoryIcon),
                     self.categoryDict.items())
+    
+    def getCategoryNames(self):
+        '''Get category names.'''
+        return map (lambda (categoryName, (categoryIcon, _)): categoryName,
+                    self.categoryDict.items())
 
+    def getUpgradableNum(self):
+        '''Get upgradable packages number.'''
+        return len(self.upgradablePkgs)
+    
+    def getIgnoreNum(self):
+        '''Get ignore package number.'''
+        return len(self.ignorePkgs)    
+    
     def getUpgradableAppList(self, startIndex, endIndex):
         '''Get upgradable application list.'''
         appList = []
         for index in range(startIndex, endIndex):
             pkgName = self.upgradablePkgs[index]
+            appList.append(self.cache[pkgName])
+        return appList
+    
+    def getIgnoreAppList(self, startIndex, endIndex):
+        '''Get Ignore application list.'''
+        appList = []
+        for index in range(startIndex, endIndex):
+            pkgName = self.ignorePkgs[index]
             appList.append(self.cache[pkgName])
         return appList
     
@@ -188,13 +273,11 @@ class RepoCache:
     
     def removePkgFromUpgradableList(self, pkgName):
         '''Remove package from upgradable list.'''
-        if pkgName in self.upgradablePkgs:
-            self.upgradablePkgs.remove(pkgName)
+        utils.removeFromList(self.upgradablePkgs, pkgName)
     
     def removePkgFromUninstallableList(self, pkgName):
         '''Remove package from uninstallable list.'''
-        if pkgName in self.uninstallablePkgs:
-            self.uninstallablePkgs.remove(pkgName)
+        utils.removeFromList(self.uninstallablePkgs, pkgName)
     
     def addPkgInUninstallableList(self, pkgName):
         '''Add package in uninstallable list.'''
@@ -210,7 +293,71 @@ class RepoCache:
             return pkg.is_installed and self.whiteListDict.has_key(pkg.name)
         else:
             return self.whiteListDict.has_key(pkg.name)
-    
+
+    def addPkgInIgnoreList(self, pkgNames):
+        '''Add package in ignore list.'''
+        for pkgName in pkgNames:
+            # Add package in ignore list.
+            utils.addInList(self.ignorePkgs, pkgName)
+                
+            # Remove package from upgradable list.
+            self.removePkgFromUpgradableList(pkgName)
+        
+        # Record.
+        self.ignorePkgs = self.sortPackages(self.ignorePkgs)
+                
+        # Update file content.
+        writeFile("./ignorePkgs", str(self.ignorePkgs))
+
+    def removePkgFromIgnoreList(self, pkgNames):
+        '''Remove package in ignore list.'''
+        for pkgName in pkgNames:
+            # Remove package from ignore list.
+            utils.removeFromList(self.ignorePkgs, pkgName)
+                
+            # Add package to upgradable list if package upgradable.
+            if self.cache.has_key(pkgName) and self.cache[pkgName].pkg.is_upgradable:
+                self.upgradablePkgs.append(pkgName)
+            
+        # Record.
+        self.upgradablePkgs = self.sortPackages(self.upgradablePkgs)
+                
+        # Update file content.
+        writeFile("./ignorePkgs", str(self.ignorePkgs))
+        
+    def sortPackages(self, pkgs, keyword=None):
+        '''Sort packages, first sort packages in white list, then other packages.'''
+        # Don't consider keyword power if keyword is None.
+        if keyword == None:
+            # Init.
+            whiteList = []
+            otherlist = []
+            
+            # Split packages.
+            for pkgName in pkgs:
+                if self.whiteListDict.has_key(pkgName):
+                    whiteList.append(pkgName)
+                else:
+                    otherlist.append(pkgName)
+            
+            return utils.sortAlpha(whiteList) + utils.sortAlpha(otherlist)
+        # Otherwise sort package at front if package name match keyword.
+        else:
+            # Init.
+            matchList = []
+            whiteList = []
+            otherList = []
+            
+            # Split packages.
+            for pkgName in pkgs:
+                if keyword in pkgName:
+                    matchList.append(pkgName)
+                elif self.whiteListDict.has_key(pkgName):
+                    whiteList.append(pkgName)
+                else:
+                    otherList.append(pkgName)
+                
+            return utils.sortMatchKeyword(matchList, keyword) + utils.sortAlpha(whiteList) + utils.sortAlpha(otherList)
 
 #  LocalWords:  pkgClassify AppInfo appList startIndex endIndex pkgName
 #  LocalWords:  uninstallablePkgs removePkgFromUpgradableList upgradablePkgs

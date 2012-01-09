@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2011 Deepin, Inc.
-#               2011 Yong Wang
+#               2011 Wang Yong
 # 
-# Author:     Yong Wang <lazycat.manatee@gmail.com>
-# Maintainer: Yong Wang <lazycat.manatee@gmail.com>
+# Author:     Wang Yong <lazycat.manatee@gmail.com>
+# Maintainer: Wang Yong <lazycat.manatee@gmail.com>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,14 +23,12 @@
 from appItem import *
 from constant import *
 from draw import *
+from lang import __, getDefaultLanguage
 import appView
 import gtk
 import pango
-import pygtk
-import utils
-pygtk.require('2.0')
-
 import urllib2
+import utils
 
 class RepoItem(DownloadItem):
     '''Application item.'''
@@ -44,9 +42,11 @@ class RepoItem(DownloadItem):
     VOTE_PADDING_Y = 1
     LIKE_PADDING_X = 10
     RATE_PADDING_X = 3
+    SIZE_LABEL_WIDTH = 60
         
     def __init__(self, appInfo, switchStatus, downloadQueue, 
-                 entryDetailCallback, sendVoteCallback, index, getSelectIndex, setSelectIndex):
+                 entryDetailCallback, sendVoteCallback, index, getSelectIndex, setSelectIndex,
+                 launchApplicationCallback):
         '''Init for application item.'''
         DownloadItem.__init__(self, appInfo, switchStatus, downloadQueue)
         
@@ -55,6 +55,7 @@ class RepoItem(DownloadItem):
         self.sendVoteCallback = sendVoteCallback
         self.index = index
         self.setSelectIndex = setSelectIndex
+        self.launchApplicationCallback = launchApplicationCallback
         
         # Init.
         self.itemBox = gtk.HBox()
@@ -64,7 +65,7 @@ class RepoItem(DownloadItem):
         self.itemFrame = gtk.Alignment()
         self.itemFrame.set(0.0, 0.5, 1.0, 1.0)
         
-        self.appBasicBox = createItemBasicBox(self.appInfo, 200, self.itemBox, self.entryDetailView)
+        self.appBasicView = AppBasicView(self.appInfo, 200 + APP_BASIC_WIDTH_ADJUST, self.itemBox, self.entryDetailView)
         
         # Widget that status will change.
         self.installingProgressbar = None
@@ -74,7 +75,7 @@ class RepoItem(DownloadItem):
         self.upgradingFeedbackLabel = None
 
         # Connect components.
-        self.itemBox.pack_start(self.appBasicBox, True, True, self.APP_LEFT_PADDING_X)
+        self.itemBox.pack_start(self.appBasicView.align, True, True, self.APP_LEFT_PADDING_X)
         
         self.appAdditionBox = gtk.HBox()
         self.appAdditionAlign = gtk.Alignment()
@@ -122,19 +123,26 @@ class RepoItem(DownloadItem):
         # Clean right box first.
         utils.containerRemoveAll(self.appAdditionBox)
         
-        # Add application size.
-        size = utils.getPkgSize(pkg)
-        appSize = gtk.Label()
-        appSize.set_markup("<span size='%s'>%s</span>" % (LABEL_FONT_SIZE, utils.formatFileSize(size)))
-        appSize.set_alignment(1.0, 0.5)
-        self.appAdditionBox.pack_start(appSize, False, False, self.LIKE_PADDING_X)
-        
         # Add application vote information.
         self.appVoteView = VoteView(
             self.appInfo, PAGE_REPO, 
-            self.entryDetailCallback,
             self.sendVoteCallback)
         self.appAdditionBox.pack_start(self.appVoteView.eventbox, False, False)
+        
+        # Add application size.
+        size = utils.getPkgSize(pkg)
+        
+        appSizeLabel = DynamicSimpleLabel(
+            self.appAdditionBox,
+            utils.formatFileSize(size),
+            appTheme.getDynamicColor("appSize"),
+            LABEL_FONT_SIZE,
+            )
+        appSize = appSizeLabel.getLabel()
+        
+        appSize.set_size_request(self.SIZE_LABEL_WIDTH, -1)
+        appSize.set_alignment(1.0, 0.5)
+        self.appAdditionBox.pack_start(appSize, False, False, self.LIKE_PADDING_X)
         
         # Add action button.
         (actionButtonBox, actionButtonAlign) = createActionButton()
@@ -142,46 +150,63 @@ class RepoItem(DownloadItem):
         if self.appInfo.status == APP_STATE_NORMAL:
             (appButton, appButtonAlign) = newActionButton(
                 "install", 0.5, 0.5, 
-                "cell", False, "安装", BUTTON_FONT_SIZE_SMALL
+                "cell", False, __("Action Install"), BUTTON_FONT_SIZE_SMALL, "buttonFont"
                 )
             appButton.connect("button-release-event", lambda widget, event: self.switchToDownloading())
             actionButtonBox.pack_start(appButtonAlign)
         elif self.appInfo.status == APP_STATE_UPGRADE:
             (appButton, appButtonAlign) = newActionButton(
                 "update", 0.5, 0.5, 
-                "cell", False, "升级", BUTTON_FONT_SIZE_SMALL
+                "cell", False, __("Action Update"), BUTTON_FONT_SIZE_SMALL, "buttonFont"
                 )
             appButton.connect("button-release-event", lambda widget, event: self.switchToDownloading())
             actionButtonBox.pack_start(appButtonAlign)
         else:
-            appInstalledLabel = gtk.Label()
-            appInstalledLabel.set_markup("<span foreground='#1A3E88' size='%s'>%s</span>" % (LABEL_FONT_SIZE, "已安装"))
-            buttonImage = gtk.gdk.pixbuf_new_from_file("./icons/cell/update_hover.png")
-            appInstalledLabel.set_size_request(buttonImage.get_width(), buttonImage.get_height())
-            actionButtonBox.pack_start(appInstalledLabel)
+            execPath = self.appInfo.execPath
+            if execPath:
+                (appButton, appButtonAlign) = newActionButton(
+                    "update", 0.5, 0.5, 
+                    "cell", False, __("Action Startup"), BUTTON_FONT_SIZE_SMALL, "buttonFont"
+                    )
+                appButton.connect("button-release-event", lambda widget, event: self.launchApplicationCallback(execPath))
+                actionButtonBox.pack_start(appButtonAlign)
+            else:
+                appInstalledDynamicLabel = DynamicSimpleLabel(
+                    actionButtonBox,
+                    __("Action Installed"),
+                    appTheme.getDynamicColor("installed"),
+                    LABEL_FONT_SIZE,
+                    )
+                appInstalledLabel = appInstalledDynamicLabel.getLabel()
+                buttonImage = appTheme.getDynamicPixbuf("cell/update_hover.png").getPixbuf()
+                appInstalledLabel.set_size_request(buttonImage.get_width(), buttonImage.get_height())
+                actionButtonBox.pack_start(appInstalledLabel)
     
-    def updateVoteView(self, starLevel, voteNum):
+    def updateVoteView(self, starLevel, commentNum):
         '''Update vote view.'''
         if self.appInfo.status in [APP_STATE_NORMAL, APP_STATE_UPGRADE, APP_STATE_INSTALLED] and self.appVoteView != None:
-            self.appVoteView.updateVote(starLevel, voteNum)
+            self.appVoteView.updateVote(starLevel, commentNum)
+            self.appBasicView.updateCommentNum(commentNum)
                 
 class RepoView(appView.AppView):
     '''Application view.'''
 	
-    def __init__(self, category, appNum, getListFunc, switchStatus, downloadQueue, 
-                 entryDetailCallback, sendVoteCallback, fetchVoteCallback):
+    def __init__(self, category, appNum, getListFunc, getSortTypeFunc, switchStatus, downloadQueue, 
+                 entryDetailCallback, sendVoteCallback, fetchVoteCallback, launchApplicationCallback):
         '''Init for application view.'''
         appView.AppView.__init__(self, appNum, PAGE_REPO)
         
         # Init.
         self.category = category
         self.getListFunc = getListFunc
+        self.getSortTypeFunc = getSortTypeFunc
         self.switchStatus = switchStatus
         self.downloadQueue = downloadQueue
         self.itemDict = {}
         self.entryDetailCallback = entryDetailCallback
         self.sendVoteCallback = sendVoteCallback
         self.fetchVoteCallback = fetchVoteCallback
+        self.launchApplicationCallback = launchApplicationCallback
         
         self.show()
         
@@ -202,14 +227,15 @@ class RepoView(appView.AppView):
         
         if self.appNum != 0:
             # Get application list.
+            sortType = self.getSortTypeFunc()
             appList = self.getListFunc(self.category, 
+                                       sortType,
                                        (self.pageIndex - 1) * self.defaultRows,
                                        min(self.pageIndex * self.defaultRows, self.appNum)
                                        )
             
             # Create application view.
             self.box.pack_start(self.createAppList(appList))
-            
             
             # Create index view.
             indexbar = self.createIndexbar()
@@ -237,7 +263,8 @@ class RepoView(appView.AppView):
             appItem = RepoItem(appInfo, self.switchStatus, self.downloadQueue, 
                                self.entryDetailCallback,
                                self.sendVoteCallback,
-                               index, self.getSelectItemIndex, self.setSelectItemIndex)
+                               index, self.getSelectItemIndex, self.setSelectItemIndex,
+                               self.launchApplicationCallback)
             box.pack_start(appItem.itemFrame, False, False)
             self.itemDict[utils.getPkgName(appItem.appInfo.pkg)] = appItem
             
