@@ -43,15 +43,16 @@ import urllib2
 def sendStatistics():
     '''Send statistics.'''
     try:
-        userId = getUniqueId()
-        args = {'a' : 'm', 'n' : userId}
+        uuid = evalFile(UUID_FILE, True)
+        if uuid: 
+            args = {'a' : 'm', 'n' : uuid}
         
-        connection = urllib2.urlopen(
-            "%s/softcenter/v1/analytics" % (SERVER_ADDRESS),
-            data=urllib.urlencode(args),
-            timeout=POST_TIMEOUT,
-            )
-        connection.read()
+            connection = urllib2.urlopen(
+                "%s/softcenter/v1/analytics" % (SERVER_ADDRESS),
+                data=urllib.urlencode(args),
+                timeout=POST_TIMEOUT,
+                )
+            connection.read()
     except Exception, e:
         print e
         
@@ -215,14 +216,8 @@ class TrayIcon(object):
         # Get input.
         ignoreInterval = len(sys.argv) == 2 and sys.argv[1] == "--now"
         
-        # Get last update hours.
-        agoHours = getLastUpdateHours("./check-update-stamp")
-        
         # Just update one day after.
-        if ignoreInterval or (agoHours != None and agoHours >= UPDATE_INTERVAL):
-            # Touch file to mark update stamp.
-            touchFile("./check-update-stamp")
-                
+        if ignoreInterval:
             # Send statistics information.
             AnonymityThread(sendStatistics).start()
             
@@ -248,8 +243,6 @@ class TrayIcon(object):
                 gtk.main()
             else:
                 print "No updatable packages, exit."
-        else:
-            print "Just check update %s hours ago" % (agoHours)
             
 if __name__ == "__main__":
     TrayIcon().main()
