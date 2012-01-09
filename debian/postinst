@@ -1,0 +1,27 @@
+#!/bin/sh
+# postinst script 
+# see: dh_installdeb(1)
+
+set -e
+
+#DEBHELPER#
+
+case "$1" in
+    configure)
+	if [ ! -e /var/lib/deepin-software-center/uuid ]; then
+	    mkdir -p /var/lib/deepin-software-center/
+	    uuidgen > /var/lib/deepin-software-center/uuid
+	fi
+	;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+
+	;;
+
+    *)
+	echo "postinst called with unknown argument \`$1'" >&2
+	exit 1
+	;;
+esac
+
+exit 0

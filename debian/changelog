@@ -1,6 +1,19 @@
+deepin-software-center (2.0.5) oneiric; urgency=low
+
+  * commandProxy won't start if it exited abnormally
+
+ -- Zhang Cheng <zhangcheng@linuxdeepin.com>  Fri, 30 Dec 2011 22:32:44 +0800
+
+deepin-software-center (2.0.4) oneiric; urgency=low
+
+  * Upstream update
+
+ -- Zhang Cheng <zhangcheng@linuxdeepin.com>  Fri, 30 Dec 2011 22:00:14 +0800
+
 deepin-software-center (2.0.3) oneiric; urgency=low
 
   * Fix typo in deepin-check-update.desktop
+  * Upstream update
 
  -- Zhang Cheng <zhangcheng@linuxdeepin.com>  Fri, 30 Dec 2011 18:47:33 +0800
 

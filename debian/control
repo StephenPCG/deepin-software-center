@@ -10,7 +10,16 @@ Homepage: https://github.com/manateelazycat/deepin-software-center
 
 Package: deepin-software-center
 Architecture: all
-Depends: ${shlibs:Depends}, ${misc:Depends}, aria2, python, python-webkit, python-apt, apt-xapian-index, python-pkg-resources, gksu
+Depends: ${shlibs:Depends}, 
+         ${misc:Depends}, 
+         aria2, 
+	 python, 
+	 python-webkit, 
+	 python-apt, 
+	 python-pkg-resources, 
+	 apt-xapian-index, 
+	 gksu,
+	 uuid-runtime
 Description: Software center for linux deepin
  Linux Deepin 原名 Hiweed GNU/Linux，是一个基于Ubuntu的中文Linux发行版，
  Linux Deepin（以下简称LD）是一个基于Ubuntu的桌面操作系统，
